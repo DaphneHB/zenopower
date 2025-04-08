@@ -1,0 +1,24 @@
+/* src/styles/news.css */
+
+/* .nws-title.current {
+  border: 1px solid red;
+
+  color: black;
+} */
+
+.news-slider-w svg {
+  transition: opacity 0.3s;
+}
+
+.news-slider-w button svg {
+  opacity: 0.6;
+}
+
+.news-slider-w button:hover svg {
+  /* color: var(--col--yankeeblue) !important; */
+  opacity: 1;
+}
+
+.news-slider-w button.disabled svg {
+  opacity: 0.5 !important;
+}

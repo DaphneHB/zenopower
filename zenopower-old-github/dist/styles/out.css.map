@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../src/styles/out.css"],
+  "sourcesContent": ["[data-taxi] {\n  visibility: hidden;\n  opacity: 0;\n}\n\n[data-nav=\"w\"] {\n  opacity: 0;\n  visibility: hidden;\n}\n"],
+  "mappings": ";AAAA,CAAC;AACC,cAAY;AACZ,WAAS;AACX;AAEA,CAAC;AACC,WAAS;AACT,cAAY;AACd;",
+  "names": []
+}

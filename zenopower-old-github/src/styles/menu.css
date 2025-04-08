@@ -1,0 +1,49 @@
+.nav-w {
+  --easing: cubic-bezier(0.215, 0.61, 0.355, 1);
+  /* --easing: ease; */
+  --duration: 0.5s;
+
+  input {
+    /* opacity: 1; */
+    inset: 0;
+  }
+}
+
+.mmenu-drawer {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.6s ease-out;
+}
+
+.mmenu-drawer > div {
+  overflow: hidden;
+}
+
+/* animation */
+.nav-w:has(input:checked) .mmenu-drawer {
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.6s ease-out;
+}
+
+[data-mmenu="icon"] div:first-child {
+  transform: rotate(0deg) translateY(-0.3rem);
+  transition: transform 0.6s ease-out;
+}
+
+[data-mmenu="icon"] div:last-child {
+  transform: rotate(0deg) translateY(0.3rem) scaleX(0.8) translateX(0.3rem);
+  transition: transform 0.6s ease-out;
+}
+
+.nav-w:has(input:checked) [data-mmenu="icon"] div:first-child {
+  transform: rotate(45deg) translateY(0rem);
+}
+
+.nav-w:has(input:checked) [data-mmenu="icon"] div:last-child {
+  transform: rotate(-45deg) translateY(0rem) scaleX(1) translateX(0rem);
+}
+
+/* reset */
+.open .mmenu-drawer {
+  grid-template-rows: 1fr !important;
+}

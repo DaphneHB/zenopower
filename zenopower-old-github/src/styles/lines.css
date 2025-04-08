@@ -1,0 +1,66 @@
+.line-sep {
+  position: relative;
+}
+
+/* horizontal lines */
+.line-sep:before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 1px;
+  background: #101b22;
+  opacity: 1;
+  transition: background 0.2s ease-in-out;
+}
+
+/* vertical lines */
+.nav-lines .line {
+  transition: background 0.2s ease-in-out;
+  background: #101b22;
+}
+
+/* ON DARK SECTIONS */
+
+/* horizontal lines */
+.darksection .line-v-dash {
+  background: #fff;
+}
+
+.darksection .line-sep:before {
+  background: #fff;
+}
+
+/* vertical lines */
+.darksection .nav-lines .line {
+  background: #fff;
+}
+
+/* Flattened .s nested rule */
+.s .line-sep:before {
+  margin-left: calc(var(--sgx) * -1);
+}
+
+/* Flattened .nav-ho-line nested rule */
+.nav-ho-line .line-sep:before {
+  margin-left: calc(var(--sgx) * -1);
+}
+
+/* Flattened nav nested rule */
+nav .line-sep:before {
+  margin-left: calc(var(--sgx) * -1);
+}
+
+@media only screen and (max-width: 767px) {
+  /* mobile */
+  /* Flattened .s nested rule */
+  .s .line-sep:before {
+    margin-left: 0;
+  }
+
+  /* Flattened nav nested rule */
+  nav .line-sep:before {
+    margin-left: 0;
+  }
+}

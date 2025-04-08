@@ -1,0 +1,141 @@
+/* corners nav */
+
+[data-css="angles-nav"] {
+  --size: 4px;
+  --color: #65baac;
+  position: relative;
+}
+.dark [data-css="angles-nav"] {
+  --color: #10728c;
+}
+
+[data-css="angles-nav"]::before,
+[data-css="angles-nav"]::after {
+  content: "";
+  position: absolute;
+  width: var(--size);
+  height: var(--size);
+  border: 1px solid var(--color);
+}
+
+[data-css="angles-nav"]::before {
+  top: 0;
+  left: 0;
+  border-right: 0;
+  border-bottom: 0;
+}
+
+[data-css="angles-nav"]::after {
+  bottom: 0;
+  right: 0;
+  border-left: 0;
+  border-top: 0;
+}
+
+[data-css="angles-nav"] span::before,
+[data-css="angles-nav"] span::after {
+  content: "";
+  position: absolute;
+  width: var(--size);
+  height: var(--size);
+  border: 1px solid var(--color);
+}
+
+[data-css="angles-nav"] span::before {
+  top: 0;
+  right: 0;
+  border-left: 0;
+  border-bottom: 0;
+}
+
+[data-css="angles-nav"] span::after {
+  bottom: 0;
+  left: 0;
+  border-right: 0;
+  border-top: 0;
+}
+
+/* light nav (home) */
+
+[data-nav="w"] [data-css="corner-nav"] {
+  opacity: 0;
+  transition: opacity var(--duration) var(--easeOut);
+}
+
+[data-nav="w"] .w--current [data-css="corner-nav"] {
+  opacity: 1;
+}
+
+[data-nav="w"] .w--current > div {
+  color: #65baac !important;
+  opacity: 1;
+}
+
+[data-nav="w"] .mmenu-drawer {
+  background-color: #0a1117;
+}
+
+/* dark nav (other) */
+[data-nav="w"].dark {
+  transition: color var(--duration) var(--easeOut); /* border: 2px solid blue; */
+
+  color: var(--col--yankeeblue);
+}
+
+[data-nav="w"].dark svg {
+  transition: color var(--duration) var(--easeOut);
+  color: var(--col--yankeeblue);
+}
+
+[data-nav="w"].dark .nav-lk-w {
+  transition: color var(--duration) var(--easeOut);
+  color: var(--col--yankeeblue);
+}
+
+[data-nav="w"].dark .w--current > div {
+  color: #10728c !important;
+}
+
+[data-nav="w"].dark .menu-icon-line {
+  background-color: var(--col--yankeeblue);
+}
+
+[data-nav="w"].dark .mmenu-drawer {
+  background-color: white;
+}
+
+[data-nav="w"].dark svg {
+  transition: color var(--duration) var(--easeOut);
+  color: var(--col--yankeeblue);
+}
+
+[data-nav="w"].dark .nav-lk-w {
+  transition: color var(--duration) var(--easeOut);
+  color: var(--col--yankeeblue);
+}
+
+[data-nav="w"].dark .w--current.nav-lk-w {
+  /* transition: color var(--duration) var(--easeOut);
+    color: var(--col--yankeeblue); */
+  color: #10728c;
+}
+
+[data-nav="w"].dark .menu-icon-line {
+  background-color: var(--col--yankeeblue);
+}
+
+/* background Bar */
+.nav-bg {
+  opacity: 0;
+  transition: opacity 0.5s ease-out;
+}
+
+.dark .nav-bg {
+  background-color: #fff;
+}
+
+.scrolled .nav-bg {
+  opacity: 1;
+}
+
+/* alt links on nav */

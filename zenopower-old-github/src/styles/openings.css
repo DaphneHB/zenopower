@@ -1,0 +1,28 @@
+[data-openings="w"] .dropdown-list {
+  visibility: hidden;
+}
+
+[data-openings="w"] .active .dropdown-list {
+  visibility: visible;
+}
+
+[data-filter="locations"],
+[data-filter="department"] .drop-icon {
+  transform: rotate(0deg);
+  transition: transform 0.3s;
+}
+
+[data-filter="locations"],
+[data-filter="department"] .dropdown-list {
+  z-index: 10000000000;
+}
+
+[data-filter="locations"].active .drop-icon,
+[data-filter="department"].active .drop-icon {
+  transform: rotate(180deg);
+}
+
+[data-filter="locations"].active .dropdown-list,
+[data-filter="department"].active .dropdown-list {
+  z-index: 10000000000;
+}

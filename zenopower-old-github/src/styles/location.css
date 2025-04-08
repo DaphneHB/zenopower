@@ -1,0 +1,15 @@
+[data-svg-loc] {
+  visibility: hidden;
+}
+
+[data-svg-loc-def="Seattle, WA"] [data-svg-loc="seattle"] {
+  visibility: visible;
+}
+
+[data-svg-loc-def="Washington, DC"] [data-svg-loc="washington"] {
+  visibility: visible;
+}
+
+[data-svg-loc-def="Richland, WA"] [data-svg-loc="richland"] {
+  visibility: visible;
+}

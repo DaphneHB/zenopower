@@ -1,0 +1,9 @@
+[data-taxi] {
+  visibility: hidden;
+  opacity: 0;
+}
+
+[data-nav="w"] {
+  opacity: 0;
+  visibility: hidden;
+}

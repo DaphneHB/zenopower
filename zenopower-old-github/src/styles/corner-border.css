@@ -1,0 +1,184 @@
+[data-css="angles"] {
+  --size: 4px;
+  --color: #65baac;
+  position: relative;
+}
+
+[data-css="angles"]::before,
+[data-css="angles"]::after {
+  content: "";
+  position: absolute;
+  width: var(--size);
+  height: var(--size);
+  border: 1px solid var(--color);
+}
+
+[data-css="angles"]::before {
+  top: 0;
+  left: 0;
+  border-right: 0;
+  border-bottom: 0;
+}
+
+[data-css="angles"]::after {
+  bottom: 0;
+  right: 0;
+  border-left: 0;
+  border-top: 0;
+}
+
+[data-css="angles"] span::before,
+[data-css="angles"] span::after {
+  content: "";
+  position: absolute;
+  width: var(--size);
+  height: var(--size);
+  border: 1px solid var(--color);
+}
+
+[data-css="angles"] span::before {
+  top: 0;
+  right: 0;
+  border-left: 0;
+  border-bottom: 0;
+}
+
+[data-css="angles"] span::after {
+  bottom: 0;
+  left: 0;
+  border-right: 0;
+  border-top: 0;
+}
+
+/* animated one */
+[data-css="corner-r"] {
+  opacity: 0;
+  transition: opacity 0.5s;
+}
+
+.w--current.nav-lk-w {
+  /* opacity: 0.5; */
+  transition: opacity 0.5s;
+}
+
+.w--current [data-css="corner-r"] {
+  transition: opacity 0.5s;
+}
+
+[data-css="angles-a"] {
+  --size: 4px;
+  --color: #65baac;
+  position: relative;
+}
+
+.w--current [data-css="angles-a"] {
+  --color: #10728c;
+}
+
+[data-css="angles-a"]::before,
+[data-css="angles-a"]::after {
+  content: "";
+  position: absolute;
+  width: var(--size);
+  height: var(--size);
+  border: 1px solid var(--color);
+}
+
+[data-css="angles-a"]::before {
+  top: 0;
+  left: 0;
+  border-right: 0;
+  border-bottom: 0;
+}
+
+[data-css="angles-a"]::after {
+  bottom: 0;
+  right: 0;
+  border-left: 0;
+  border-top: 0;
+}
+
+[data-css="angles-a"] span::before,
+[data-css="angles-a"] span::after {
+  content: "";
+  position: absolute;
+  width: var(--size);
+  height: var(--size);
+  border: 1px solid var(--color);
+}
+
+[data-css="angles-a"] span::before {
+  top: 0;
+  right: 0;
+  border-left: 0;
+  border-bottom: 0;
+}
+
+[data-css="angles-a"] span::after {
+  bottom: 0;
+  left: 0;
+  border-right: 0;
+  border-top: 0;
+}
+
+/* --- news articles */
+[data-css="angles-b"] {
+  --size: 4px;
+  --color: black;
+  position: relative;
+}
+
+[data-css="angles-b"]::before,
+[data-css="angles-b"]::after {
+  content: "";
+  position: absolute;
+  width: var(--size);
+  height: var(--size);
+  border: 1px solid var(--color);
+}
+
+[data-css="angles-b"]::before {
+  top: 0;
+  left: 0;
+  border-right: 0;
+  border-bottom: 0;
+}
+
+[data-css="angles-b"]::after {
+  bottom: 0;
+  right: 0;
+  border-left: 0;
+  border-top: 0;
+}
+
+[data-css="angles-b"] span::before,
+[data-css="angles-b"] span::after {
+  content: "";
+  position: absolute;
+  width: var(--size);
+  height: var(--size);
+  border: 1px solid var(--color);
+}
+
+[data-css="angles-b"] span::before {
+  top: 0;
+  right: 0;
+  border-left: 0;
+  border-bottom: 0;
+}
+
+[data-css="angles-b"] span::after {
+  bottom: 0;
+  left: 0;
+  border-right: 0;
+  border-top: 0;
+}
+
+.corners-b {
+  opacity: 0;
+  transition: opacity 0.5s;
+}
+
+.current .corners-b {
+  opacity: 1;
+}

@@ -1,0 +1,12 @@
+[data-embla="wrapper"] {
+  overflow: hidden;
+}
+
+[data-embla="container"] {
+  display: flex;
+}
+
+[data-embla="slide"] {
+  flex: 0 0 100%;
+  min-width: 0;
+}
