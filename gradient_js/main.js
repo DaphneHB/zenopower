@@ -4,13 +4,12 @@ import fragment from "./fragment.frag";
 import { clamp } from "../../util/math";
 
 import gsap, { ANIMATION } from "../../gsap";
-import Hey from "../../hey";
-import { Gl } from "../gl";
-
-import { Sparkle } from "../sparkle";
-import { Track } from "../../util/track";
 
 import { visible } from "../../util/gui";
+import Hey from "./modules/Hey.js";
+import { Gl } from "./modules/gl.js";
+import { Sparkle } from "./modules/sparkle";
+import { Track } from "./modules/track.js";
 
 const GRADIENT = {
   dark1: 0x0d151b,
