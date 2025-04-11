@@ -25,12 +25,22 @@ class GradientBackground {
         // Find or create container
         this.container = typeof container === 'string' ? 
             document.querySelector(container) : container;
+            
+        if (!this.container) {
+            console.error('Container not found');
+            return;
+        }
+        
         this.container.style.position = 'relative';
         this.container.appendChild(this.canvas);
 
         // Initialize WebGL
-        this.gl = this.canvas.getContext('webgl') || 
-                 this.canvas.getContext('experimental-webgl');
+        this.gl = this.canvas.getContext('webgl', {
+            preserveDrawingBuffer: true,
+            alpha: true,
+            premultipliedAlpha: false
+        }) || this.canvas.getContext('experimental-webgl');
+        
         if (!this.gl) {
             console.error('WebGL not supported');
             return;
@@ -39,7 +49,7 @@ class GradientBackground {
         this.init();
         this.setupGUI();
         this.resize();
-        this.render();
+        this.animate();
 
         // Event listeners
         window.addEventListener('resize', () => this.resize());
@@ -52,112 +62,111 @@ class GradientBackground {
 
     init() {
         // Vertex shader
-        const vertexShader = \`
-            attribute vec2 position;
-            attribute vec2 uv;
-            varying vec2 v_uv;
-            
-            void main() {
-                gl_Position = vec4(position, 0, 1);
-                v_uv = uv;
-            }
-        \`;
+        const vertexShaderSource = 
+            'attribute vec2 position;' +
+            'attribute vec2 uv;' +
+            'varying vec2 v_uv;' +
+            'void main() {' +
+            '    gl_Position = vec4(position, 0, 1);' +
+            '    v_uv = uv;' +
+            '}';
 
-        // Fragment shader (including simplex noise)
-        const fragmentShader = \`
-            precision highp float;
+        // Fragment shader
+        const fragmentShaderSource = 
+            'precision highp float;' +
             
             // Simplex noise implementation
-            vec4 permute(vec4 x) {
-                return mod(((x * 34.0) + 1.0) * x, 289.0);
-            }
-            vec4 taylorInvSqrt(vec4 r) {
-                return 1.79284291400159 - 0.85373472095314 * r;
-            }
-            float simplex3d(vec3 v) {
-                const vec2 C = vec2(1.0/6.0, 1.0/3.0);
-                const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+            'vec4 permute(vec4 x) { return mod(((x * 34.0) + 1.0) * x, 289.0); }' +
+            'vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }' +
+            
+            'float simplex3d(vec3 v) {' +
+            '    const vec2 C = vec2(1.0/6.0, 1.0/3.0);' +
+            '    const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);' +
+            
+            '    vec3 i  = floor(v + dot(v, C.yyy));' +
+            '    vec3 x0 = v - i + dot(i, C.xxx);' +
+            
+            '    vec3 g = step(x0.yzx, x0.xyz);' +
+            '    vec3 l = 1.0 - g;' +
+            '    vec3 i1 = min(g.xyz, l.zxy);' +
+            '    vec3 i2 = max(g.xyz, l.zxy);' +
+            
+            '    vec3 x1 = x0 - i1 + C.xxx;' +
+            '    vec3 x2 = x0 - i2 + C.yyy;' +
+            '    vec3 x3 = x0 - D.yyy;' +
+            
+            '    i = mod(i, 289.0);' +
+            '    vec4 p = permute(permute(permute(' +
+            '            i.z + vec4(0.0, i1.z, i2.z, 1.0))' +
+            '            + i.y + vec4(0.0, i1.y, i2.y, 1.0))' +
+            '            + i.x + vec4(0.0, i1.x, i2.x, 1.0));' +
+            
+            '    float n_ = 1.0/7.0;' +
+            '    vec3 ns = n_ * D.wyz - D.xzx;' +
+            
+            '    vec4 j = p - 49.0 * floor(p * ns.z * ns.z);' +
+            
+            '    vec4 x_ = floor(j * ns.z);' +
+            '    vec4 y_ = floor(j - 7.0 * x_);' +
+            
+            '    vec4 x = x_ *ns.x + ns.yyyy;' +
+            '    vec4 y = y_ *ns.x + ns.yyyy;' +
+            '    vec4 h = 1.0 - abs(x) - abs(y);' +
+            
+            '    vec4 b0 = vec4(x.xy, y.xy);' +
+            '    vec4 b1 = vec4(x.zw, y.zw);' +
+            
+            '    vec4 s0 = floor(b0)*2.0 + 1.0;' +
+            '    vec4 s1 = floor(b1)*2.0 + 1.0;' +
+            '    vec4 sh = -step(h, vec4(0.0));' +
+            
+            '    vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy;' +
+            '    vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww;' +
+            
+            '    vec3 p0 = vec3(a0.xy,h.x);' +
+            '    vec3 p1 = vec3(a0.zw,h.y);' +
+            '    vec3 p2 = vec3(a1.xy,h.z);' +
+            '    vec3 p3 = vec3(a1.zw,h.w);' +
+            
+            '    vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2, p2), dot(p3,p3)));' +
+            '    p0 *= norm.x;' +
+            '    p1 *= norm.y;' +
+            '    p2 *= norm.z;' +
+            '    p3 *= norm.w;' +
+            
+            '    vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);' +
+            '    m = m * m;' +
+            '    return 42.0 * dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));' +
+            '}' +
 
-                vec3 i  = floor(v + dot(v, C.yyy));
-                vec3 x0 = v - i + dot(i, C.xxx);
+            'uniform float u_time;' +
+            'uniform vec3 u_color_dark1;' +
+            'uniform vec3 u_color_dark2;' +
+            'uniform vec3 u_color_light1;' +
+            'uniform vec3 u_color_light2;' +
+            'uniform float u_BG_POWER;' +
+            'varying vec2 v_uv;' +
 
-                vec3 g = step(x0.yzx, x0.xyz);
-                vec3 l = 1.0 - g;
-                vec3 i1 = min(g.xyz, l.zxy);
-                vec3 i2 = max(g.xyz, l.zxy);
-
-                vec3 x1 = x0 - i1 + C.xxx;
-                vec3 x2 = x0 - i2 + C.yyy;
-                vec3 x3 = x0 - D.yyy;
-
-                i = mod(i, 289.0);
-                vec4 p = permute(permute(permute(
-                        i.z + vec4(0.0, i1.z, i2.z, 1.0))
-                        + i.y + vec4(0.0, i1.y, i2.y, 1.0))
-                        + i.x + vec4(0.0, i1.x, i2.x, 1.0));
-
-                float n_ = 1.0/7.0;
-                vec3 ns = n_ * D.wyz - D.xzx;
-
-                vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
-
-                vec4 x_ = floor(j * ns.z);
-                vec4 y_ = floor(j - 7.0 * x_);
-
-                vec4 x = x_ *ns.x + ns.yyyy;
-                vec4 y = y_ *ns.x + ns.yyyy;
-                vec4 h = 1.0 - abs(x) - abs(y);
-
-                vec4 b0 = vec4(x.xy, y.xy);
-                vec4 b1 = vec4(x.zw, y.zw);
-
-                vec4 s0 = floor(b0)*2.0 + 1.0;
-                vec4 s1 = floor(b1)*2.0 + 1.0;
-                vec4 sh = -step(h, vec4(0.0));
-
-                vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy;
-                vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww;
-
-                vec3 p0 = vec3(a0.xy,h.x);
-                vec3 p1 = vec3(a0.zw,h.y);
-                vec3 p2 = vec3(a1.xy,h.z);
-                vec3 p3 = vec3(a1.zw,h.w);
-
-                vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2, p2), dot(p3,p3)));
-                p0 *= norm.x;
-                p1 *= norm.y;
-                p2 *= norm.z;
-                p3 *= norm.w;
-
-                vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
-                m = m * m;
-                return 42.0 * dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));
-            }
-
-            uniform float u_time;
-            uniform vec3 u_color_dark1;
-            uniform vec3 u_color_dark2;
-            uniform vec3 u_color_light1;
-            uniform vec3 u_color_light2;
-            uniform float u_BG_POWER;
-            varying vec2 v_uv;
-
-            void main() {
-                float ns = smoothstep(0., 1., simplex3d(vec3(v_uv * 1. + u_time, u_time * 1.5)));
-                float dist = distance(v_uv, vec2(0., .7));
-                dist = smoothstep(0.1, 1., dist);
-                float grad = ns * dist;
-
-                vec3 col1 = mix(u_color_dark1 * 1.2, u_color_dark2, grad);
-                vec3 col2 = mix(u_color_light1, u_color_light2, grad);
-                vec3 color = mix(col2 * u_BG_POWER, col1, 0.5);
-
-                gl_FragColor = vec4(color, 1.0);
-            }
-        \`;
+            'void main() {' +
+            '    float ns = smoothstep(0., 1., simplex3d(vec3(v_uv * 1. + u_time, u_time * 1.5)));' +
+            '    float dist = distance(v_uv, vec2(0., .7));' +
+            '    dist = smoothstep(0.1, 1., dist);' +
+            '    float grad = ns * dist;' +
+            
+            '    vec3 col1 = mix(u_color_dark1 * 1.2, u_color_dark2, grad);' +
+            '    vec3 col2 = mix(u_color_light1, u_color_light2, grad);' +
+            '    vec3 color = mix(col2 * u_BG_POWER, col1, 0.5);' +
+            
+            '    gl_FragColor = vec4(color, 1.0);' +
+            '}';
 
         // Create shader program
-        this.program = this.createShaderProgram(vertexShader, fragmentShader);
+        this.program = this.createShaderProgram(vertexShaderSource, fragmentShaderSource);
+        
+        if (!this.program) {
+            console.error('Failed to create shader program');
+            return;
+        }
         
         // Create buffers
         const positions = new Float32Array([
@@ -190,34 +199,30 @@ class GradientBackground {
         this.bgPowerLocation = this.gl.getUniformLocation(this.program, 'u_BG_POWER');
 
         this.startTime = Date.now();
+        
+        // Enable alpha blending
+        this.gl.enable(this.gl.BLEND);
+        this.gl.blendFunc(this.gl.SRC_ALPHA, this.gl.ONE_MINUS_SRC_ALPHA);
     }
 
     createBuffer(data) {
         const buffer = this.gl.createBuffer();
+        if (!buffer) {
+            console.error('Failed to create buffer');
+            return null;
+        }
         this.gl.bindBuffer(this.gl.ARRAY_BUFFER, buffer);
         this.gl.bufferData(this.gl.ARRAY_BUFFER, data, this.gl.STATIC_DRAW);
         return buffer;
     }
 
-    createShaderProgram(vertexSource, fragmentSource) {
-        const vertexShader = this.createShader(this.gl.VERTEX_SHADER, vertexSource);
-        const fragmentShader = this.createShader(this.gl.FRAGMENT_SHADER, fragmentSource);
-        
-        const program = this.gl.createProgram();
-        this.gl.attachShader(program, vertexShader);
-        this.gl.attachShader(program, fragmentShader);
-        this.gl.linkProgram(program);
-        
-        if (!this.gl.getProgramParameter(program, this.gl.LINK_STATUS)) {
-            console.error('Unable to initialize shader program:', this.gl.getProgramInfoLog(program));
+    createShader(type, source) {
+        const shader = this.gl.createShader(type);
+        if (!shader) {
+            console.error('Failed to create shader');
             return null;
         }
         
-        return program;
-    }
-
-    createShader(type, source) {
-        const shader = this.gl.createShader(type);
         this.gl.shaderSource(shader, source);
         this.gl.compileShader(shader);
         
@@ -230,9 +235,39 @@ class GradientBackground {
         return shader;
     }
 
+    createShaderProgram(vertexSource, fragmentSource) {
+        const vertexShader = this.createShader(this.gl.VERTEX_SHADER, vertexSource);
+        const fragmentShader = this.createShader(this.gl.FRAGMENT_SHADER, fragmentSource);
+        
+        if (!vertexShader || !fragmentShader) {
+            return null;
+        }
+        
+        const program = this.gl.createProgram();
+        if (!program) {
+            console.error('Failed to create program');
+            return null;
+        }
+        
+        this.gl.attachShader(program, vertexShader);
+        this.gl.attachShader(program, fragmentShader);
+        this.gl.linkProgram(program);
+        
+        if (!this.gl.getProgramParameter(program, this.gl.LINK_STATUS)) {
+            console.error('Unable to initialize shader program:', this.gl.getProgramInfoLog(program));
+            return null;
+        }
+        
+        return program;
+    }
+
     setupGUI() {
-        // Only setup if dat.gui is available
-        if (window.dat) {
+        if (!window.dat) {
+            console.warn('dat.gui not found, skipping GUI setup');
+            return;
+        }
+        
+        try {
             this.gui = new dat.GUI({ autoPlace: false });
             this.gui.domElement.style.display = 'none';
             this.container.appendChild(this.gui.domElement);
@@ -245,6 +280,8 @@ class GradientBackground {
             
             this.gui.add(this.options, 'bgPower', 0.1, 2.0);
             colors.open();
+        } catch (error) {
+            console.error('Error setting up GUI:', error);
         }
     }
 
@@ -256,6 +293,8 @@ class GradientBackground {
     }
 
     resize() {
+        if (!this.canvas || !this.gl) return;
+        
         const rect = this.container.getBoundingClientRect();
         const dpr = window.devicePixelRatio || 1;
         this.canvas.width = rect.width * dpr;
@@ -264,19 +303,23 @@ class GradientBackground {
     }
 
     render() {
+        if (!this.gl || !this.program) return;
+
         // Clear and set program
-        this.gl.clearColor(0, 0, 0, 1);
+        this.gl.clearColor(0, 0, 0, 0);
         this.gl.clear(this.gl.COLOR_BUFFER_BIT);
         this.gl.useProgram(this.program);
 
         // Set attributes
-        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.positionBuffer);
-        this.gl.enableVertexAttribArray(this.positionLocation);
-        this.gl.vertexAttribPointer(this.positionLocation, 2, this.gl.FLOAT, false, 0, 0);
+        if (this.positionBuffer && this.uvBuffer) {
+            this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.positionBuffer);
+            this.gl.enableVertexAttribArray(this.positionLocation);
+            this.gl.vertexAttribPointer(this.positionLocation, 2, this.gl.FLOAT, false, 0, 0);
 
-        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.uvBuffer);
-        this.gl.enableVertexAttribArray(this.uvLocation);
-        this.gl.vertexAttribPointer(this.uvLocation, 2, this.gl.FLOAT, false, 0, 0);
+            this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.uvBuffer);
+            this.gl.enableVertexAttribArray(this.uvLocation);
+            this.gl.vertexAttribPointer(this.uvLocation, 2, this.gl.FLOAT, false, 0, 0);
+        }
 
         // Update uniforms
         const time = (Date.now() - this.startTime) * 0.001;
@@ -290,9 +333,34 @@ class GradientBackground {
 
         // Draw
         this.gl.drawArrays(this.gl.TRIANGLE_STRIP, 0, 4);
+    }
 
-        // Request next frame
-        requestAnimationFrame(() => this.render());
+    animate() {
+        this.render();
+        this.animationFrame = requestAnimationFrame(() => this.animate());
+    }
+
+    destroy() {
+        if (this.animationFrame) {
+            cancelAnimationFrame(this.animationFrame);
+        }
+        
+        if (this.gui) {
+            this.gui.destroy();
+        }
+
+        window.removeEventListener('resize', this.resize);
+        window.removeEventListener('keydown', this.toggleGUI);
+
+        if (this.gl) {
+            this.gl.deleteProgram(this.program);
+            this.gl.deleteBuffer(this.positionBuffer);
+            this.gl.deleteBuffer(this.uvBuffer);
+        }
+
+        if (this.canvas && this.canvas.parentNode) {
+            this.canvas.parentNode.removeChild(this.canvas);
+        }
     }
 }
 
