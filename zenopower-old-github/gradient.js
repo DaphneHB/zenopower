@@ -266,20 +266,63 @@ class GradientBackground {
         }
         
         try {
-            this.gui = new dat.GUI({ autoPlace: false });
+            this.gui = new dat.GUI({ 
+                autoPlace: false,
+                width: 280 // Set a reasonable width
+            });
+            
+            // Style the GUI
             this.gui.domElement.style.display = 'none';
-            this.container.appendChild(this.gui.domElement);
+            this.gui.domElement.style.position = 'fixed';
+            this.gui.domElement.style.top = '10px';
+            this.gui.domElement.style.right = '10px';
+            this.gui.domElement.style.left = 'auto';
+            this.gui.domElement.style.zIndex = '1000';
+            
+            // Add custom CSS to fix dat.gui styling
+            const style = document.createElement('style');
+            style.textContent = `
+                .dg.main {
+                    font: 11px 'Lucida Grande', sans-serif;
+                    background-color: #1a1a1a;
+                    color: #ebebeb;
+                    text-shadow: none;
+                    border-radius: 4px;
+                }
+                .dg.main .close-button {
+                    display: none;
+                }
+                .dg.main .slider {
+                    margin-left: 0;
+                }
+                .dg .c input[type=text] {
+                    background: #303030;
+                    border: none;
+                    border-radius: 2px;
+                    color: #ffffff;
+                }
+                .dg .property-name {
+                    width: 40%;
+                }
+                .dg .c .slider {
+                    background: #303030;
+                    cursor: ew-resize;
+                }
+            `;
+            document.head.appendChild(style);
+            
+            document.body.appendChild(this.gui.domElement);
 
             const colors = this.gui.addFolder('Colors');
-            colors.addColor(this.options.colors, 'dark1').name('Dark 1');
-            colors.addColor(this.options.colors, 'dark2').name('Dark 2');
-            colors.addColor(this.options.colors, 'light1').name('Light 1');
-            colors.addColor(this.options.colors, 'light2').name('Light 2');
+            colors.addColor(this.options.colors, 'dark1').name('Dark 1').onChange(() => this.render());
+            colors.addColor(this.options.colors, 'dark2').name('Dark 2').onChange(() => this.render());
+            colors.addColor(this.options.colors, 'light1').name('Light 1').onChange(() => this.render());
+            colors.addColor(this.options.colors, 'light2').name('Light 2').onChange(() => this.render());
             
             const controls = this.gui.addFolder('Controls');
-            controls.add(this.options, 'bgPower', 0.1, 2.0).name('Brightness');
-            controls.add(this.options, 'animationSpeed', 0.05, 1.0).name('Speed');
-            controls.add(this.options, 'darkMix', 0, 1).name('Dark Mix');
+            controls.add(this.options, 'bgPower', 0.1, 2.0, 0.1).name('Brightness');
+            controls.add(this.options, 'animationSpeed', 0.001, 0.1, 0.001).name('Speed');
+            controls.add(this.options, 'darkMix', 0, 1, 0.1).name('Dark Mix');
             
             colors.open();
             controls.open();
@@ -324,8 +367,9 @@ class GradientBackground {
             this.gl.vertexAttribPointer(this.uvLocation, 2, this.gl.FLOAT, false, 0, 0);
         }
 
-        // Update uniforms with animation speed
-        const time = (Date.now() - this.startTime) * 0.001 * this.options.animationSpeed;
+        // Slow down the time calculation significantly
+        const timeScale = 0.05; // Additional time scaling factor
+        const time = (Date.now() - this.startTime) * 0.001 * this.options.animationSpeed * timeScale;
         this.gl.uniform1f(this.timeLocation, time);
         
         this.gl.uniform3fv(this.colorDark1Location, this.options.colors.dark1);
