@@ -12,6 +12,8 @@ class GradientBackground {
                 light2: [0xc4/255, 0xdc/255, 0xe5/255]
             },
             bgPower: 1.8, // Increased brightness
+            animationSpeed: 0.2, // Nouvelle option pour la vitesse
+            darkMix: 0.4, // Contrôle du mix entre couleurs claires et sombres
             ...options
         };
 
@@ -63,19 +65,96 @@ class GradientBackground {
 
     async init() {
         try {
-            // Load shader files
-            const vertexResponse = await fetch('/src/gl/screen/vertex.vert');
-            const fragmentResponse = await fetch('/src/gl/screen/fragment.frag');
-            
-            if (!vertexResponse.ok || !fragmentResponse.ok) {
-                throw new Error('Failed to load shader files');
-            }
-    
-            const vertexShaderSource = await vertexResponse.text();
-            const fragmentShaderSource = await fragmentResponse.text();
-    
+            // Charger les shaders depuis les fichiers
+            const vertexSource = `
+                attribute vec2 position;
+                attribute vec2 uv;
+                varying vec2 v_uv;
+                
+                void main() {
+                    gl_Position = vec4(position, 0, 1);
+                    v_uv = uv;
+                }
+            `;
+
+            const fragmentSource = `
+                precision highp float;
+                
+                uniform float u_time;
+                uniform vec3 u_color_dark1;
+                uniform vec3 u_color_dark2;
+                uniform vec3 u_color_light1;
+                uniform vec3 u_color_light2;
+                uniform float u_BG_POWER;
+                uniform float u_dark_mix;
+                varying vec2 v_uv;
+
+                // Simplex noise implementation
+                vec4 permute(vec4 x) { return mod(((x * 34.0) + 1.0) * x, 289.0); }
+                vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
+                
+                float simplex3d(vec3 v) {
+                    const vec2 C = vec2(1.0/6.0, 1.0/3.0);
+                    const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+                    vec3 i  = floor(v + dot(v, C.yyy));
+                    vec3 x0 = v - i + dot(i, C.xxx);
+                    vec3 g = step(x0.yzx, x0.xyz);
+                    vec3 l = 1.0 - g;
+                    vec3 i1 = min(g.xyz, l.zxy);
+                    vec3 i2 = max(g.xyz, l.zxy);
+                    vec3 x1 = x0 - i1 + C.xxx;
+                    vec3 x2 = x0 - i2 + C.yyy;
+                    vec3 x3 = x0 - D.yyy;
+                    i = mod(i, 289.0);
+                    vec4 p = permute(permute(permute(
+                            i.z + vec4(0.0, i1.z, i2.z, 1.0))
+                            + i.y + vec4(0.0, i1.y, i2.y, 1.0))
+                            + i.x + vec4(0.0, i1.x, i2.x, 1.0));
+                    float n_ = 1.0/7.0;
+                    vec3 ns = n_ * D.wyz - D.xzx;
+                    vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
+                    vec4 x_ = floor(j * ns.z);
+                    vec4 y_ = floor(j - 7.0 * x_);
+                    vec4 x = x_ *ns.x + ns.yyyy;
+                    vec4 y = y_ *ns.x + ns.yyyy;
+                    vec4 h = 1.0 - abs(x) - abs(y);
+                    vec4 b0 = vec4(x.xy, y.xy);
+                    vec4 b1 = vec4(x.zw, y.zw);
+                    vec4 s0 = floor(b0)*2.0 + 1.0;
+                    vec4 s1 = floor(b1)*2.0 + 1.0;
+                    vec4 sh = -step(h, vec4(0.0));
+                    vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy;
+                    vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww;
+                    vec3 p0 = vec3(a0.xy,h.x);
+                    vec3 p1 = vec3(a0.zw,h.y);
+                    vec3 p2 = vec3(a1.xy,h.z);
+                    vec3 p3 = vec3(a1.zw,h.w);
+                    vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2, p2), dot(p3,p3)));
+                    p0 *= norm.x;
+                    p1 *= norm.y;
+                    p2 *= norm.z;
+                    p3 *= norm.w;
+                    vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
+                    m = m * m;
+                    return 42.0 * dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));
+                }
+
+                void main() {
+                    float ns = smoothstep(0., 1., simplex3d(vec3(v_uv * 0.8 + u_time * 0.2, u_time * 0.3)));
+                    float dist = distance(v_uv, vec2(0., .7));
+                    dist = smoothstep(0.2, 1., dist);
+                    float grad = ns * dist;
+                    
+                    vec3 col1 = mix(u_color_dark1 * 1.2, u_color_dark2, grad);
+                    vec3 col2 = mix(u_color_light1, u_color_light2, grad);
+                    vec3 color = mix(col2 * u_BG_POWER, col1, u_dark_mix);
+                    
+                    gl_FragColor = vec4(color, 1.0);
+                }
+            `;
+
             // Create shader program
-            this.program = this.createShaderProgram(vertexShaderSource, fragmentShaderSource);
+            this.program = this.createShaderProgram(vertexSource, fragmentSource);
             
             if (!this.program) {
                 console.error('Failed to create shader program');
@@ -111,6 +190,7 @@ class GradientBackground {
             this.colorLight1Location = this.gl.getUniformLocation(this.program, 'u_color_light1');
             this.colorLight2Location = this.gl.getUniformLocation(this.program, 'u_color_light2');
             this.bgPowerLocation = this.gl.getUniformLocation(this.program, 'u_BG_POWER');
+            this.darkMixLocation = this.gl.getUniformLocation(this.program, 'u_dark_mix');
 
             this.startTime = Date.now();
             
@@ -191,13 +271,18 @@ class GradientBackground {
             this.container.appendChild(this.gui.domElement);
 
             const colors = this.gui.addFolder('Colors');
-            colors.addColor(this.options.colors, 'dark1');
-            colors.addColor(this.options.colors, 'dark2');
-            colors.addColor(this.options.colors, 'light1');
-            colors.addColor(this.options.colors, 'light2');
+            colors.addColor(this.options.colors, 'dark1').name('Dark 1');
+            colors.addColor(this.options.colors, 'dark2').name('Dark 2');
+            colors.addColor(this.options.colors, 'light1').name('Light 1');
+            colors.addColor(this.options.colors, 'light2').name('Light 2');
             
-            this.gui.add(this.options, 'bgPower', 0.1, 2.0);
+            const controls = this.gui.addFolder('Controls');
+            controls.add(this.options, 'bgPower', 0.1, 2.0).name('Brightness');
+            controls.add(this.options, 'animationSpeed', 0.05, 1.0).name('Speed');
+            controls.add(this.options, 'darkMix', 0, 1).name('Dark Mix');
+            
             colors.open();
+            controls.open();
         } catch (error) {
             console.error('Error setting up GUI:', error);
         }
@@ -239,8 +324,8 @@ class GradientBackground {
             this.gl.vertexAttribPointer(this.uvLocation, 2, this.gl.FLOAT, false, 0, 0);
         }
 
-        // Update uniforms
-        const time = (Date.now() - this.startTime) * 0.001;
+        // Update uniforms with animation speed
+        const time = (Date.now() - this.startTime) * 0.001 * this.options.animationSpeed;
         this.gl.uniform1f(this.timeLocation, time);
         
         this.gl.uniform3fv(this.colorDark1Location, this.options.colors.dark1);
@@ -248,6 +333,7 @@ class GradientBackground {
         this.gl.uniform3fv(this.colorLight1Location, this.options.colors.light1);
         this.gl.uniform3fv(this.colorLight2Location, this.options.colors.light2);
         this.gl.uniform1f(this.bgPowerLocation, this.options.bgPower);
+        this.gl.uniform1f(this.darkMixLocation, this.options.darkMix);
 
         // Draw
         this.gl.drawArrays(this.gl.TRIANGLE_STRIP, 0, 4);
