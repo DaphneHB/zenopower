@@ -1,0 +1,304 @@
+// Gradient background with optional sparkles
+class GradientBackground {
+    constructor(container, options = {}) {
+        // Default options
+        this.options = {
+            useSparkles: false,
+            colors: {
+                dark1: [0.1, 0.1, 0.2],
+                dark2: [0.15, 0.15, 0.25],
+                light1: [0.4, 0.4, 0.8],
+                light2: [0.5, 0.5, 0.9]
+            },
+            bgPower: 1.2,
+            ...options
+        };
+
+        // Setup canvas and WebGL
+        this.canvas = document.createElement('canvas');
+        this.canvas.style.position = 'absolute';
+        this.canvas.style.top = '0';
+        this.canvas.style.left = '0';
+        this.canvas.style.width = '100%';
+        this.canvas.style.height = '100%';
+        
+        // Find or create container
+        this.container = typeof container === 'string' ? 
+            document.querySelector(container) : container;
+        this.container.style.position = 'relative';
+        this.container.appendChild(this.canvas);
+
+        // Initialize WebGL
+        this.gl = this.canvas.getContext('webgl') || 
+                 this.canvas.getContext('experimental-webgl');
+        if (!this.gl) {
+            console.error('WebGL not supported');
+            return;
+        }
+
+        this.init();
+        this.setupGUI();
+        this.resize();
+        this.render();
+
+        // Event listeners
+        window.addEventListener('resize', () => this.resize());
+        window.addEventListener('keydown', (e) => {
+            if (e.shiftKey && e.key.toLowerCase() === 'g') {
+                this.toggleGUI();
+            }
+        });
+    }
+
+    init() {
+        // Vertex shader
+        const vertexShader = \`
+            attribute vec2 position;
+            attribute vec2 uv;
+            varying vec2 v_uv;
+            
+            void main() {
+                gl_Position = vec4(position, 0, 1);
+                v_uv = uv;
+            }
+        \`;
+
+        // Fragment shader (including simplex noise)
+        const fragmentShader = \`
+            precision highp float;
+            
+            // Simplex noise implementation
+            vec4 permute(vec4 x) {
+                return mod(((x * 34.0) + 1.0) * x, 289.0);
+            }
+            vec4 taylorInvSqrt(vec4 r) {
+                return 1.79284291400159 - 0.85373472095314 * r;
+            }
+            float simplex3d(vec3 v) {
+                const vec2 C = vec2(1.0/6.0, 1.0/3.0);
+                const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+
+                vec3 i  = floor(v + dot(v, C.yyy));
+                vec3 x0 = v - i + dot(i, C.xxx);
+
+                vec3 g = step(x0.yzx, x0.xyz);
+                vec3 l = 1.0 - g;
+                vec3 i1 = min(g.xyz, l.zxy);
+                vec3 i2 = max(g.xyz, l.zxy);
+
+                vec3 x1 = x0 - i1 + C.xxx;
+                vec3 x2 = x0 - i2 + C.yyy;
+                vec3 x3 = x0 - D.yyy;
+
+                i = mod(i, 289.0);
+                vec4 p = permute(permute(permute(
+                        i.z + vec4(0.0, i1.z, i2.z, 1.0))
+                        + i.y + vec4(0.0, i1.y, i2.y, 1.0))
+                        + i.x + vec4(0.0, i1.x, i2.x, 1.0));
+
+                float n_ = 1.0/7.0;
+                vec3 ns = n_ * D.wyz - D.xzx;
+
+                vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
+
+                vec4 x_ = floor(j * ns.z);
+                vec4 y_ = floor(j - 7.0 * x_);
+
+                vec4 x = x_ *ns.x + ns.yyyy;
+                vec4 y = y_ *ns.x + ns.yyyy;
+                vec4 h = 1.0 - abs(x) - abs(y);
+
+                vec4 b0 = vec4(x.xy, y.xy);
+                vec4 b1 = vec4(x.zw, y.zw);
+
+                vec4 s0 = floor(b0)*2.0 + 1.0;
+                vec4 s1 = floor(b1)*2.0 + 1.0;
+                vec4 sh = -step(h, vec4(0.0));
+
+                vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy;
+                vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww;
+
+                vec3 p0 = vec3(a0.xy,h.x);
+                vec3 p1 = vec3(a0.zw,h.y);
+                vec3 p2 = vec3(a1.xy,h.z);
+                vec3 p3 = vec3(a1.zw,h.w);
+
+                vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2, p2), dot(p3,p3)));
+                p0 *= norm.x;
+                p1 *= norm.y;
+                p2 *= norm.z;
+                p3 *= norm.w;
+
+                vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
+                m = m * m;
+                return 42.0 * dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));
+            }
+
+            uniform float u_time;
+            uniform vec3 u_color_dark1;
+            uniform vec3 u_color_dark2;
+            uniform vec3 u_color_light1;
+            uniform vec3 u_color_light2;
+            uniform float u_BG_POWER;
+            varying vec2 v_uv;
+
+            void main() {
+                float ns = smoothstep(0., 1., simplex3d(vec3(v_uv * 1. + u_time, u_time * 1.5)));
+                float dist = distance(v_uv, vec2(0., .7));
+                dist = smoothstep(0.1, 1., dist);
+                float grad = ns * dist;
+
+                vec3 col1 = mix(u_color_dark1 * 1.2, u_color_dark2, grad);
+                vec3 col2 = mix(u_color_light1, u_color_light2, grad);
+                vec3 color = mix(col2 * u_BG_POWER, col1, 0.5);
+
+                gl_FragColor = vec4(color, 1.0);
+            }
+        \`;
+
+        // Create shader program
+        this.program = this.createShaderProgram(vertexShader, fragmentShader);
+        
+        // Create buffers
+        const positions = new Float32Array([
+            -1, -1,
+            1, -1,
+            -1, 1,
+            1, 1
+        ]);
+        
+        const uvs = new Float32Array([
+            0, 0,
+            1, 0,
+            0, 1,
+            1, 1
+        ]);
+
+        // Setup attributes and uniforms
+        this.positionBuffer = this.createBuffer(positions);
+        this.uvBuffer = this.createBuffer(uvs);
+        
+        this.positionLocation = this.gl.getAttribLocation(this.program, 'position');
+        this.uvLocation = this.gl.getAttribLocation(this.program, 'uv');
+        
+        // Get uniform locations
+        this.timeLocation = this.gl.getUniformLocation(this.program, 'u_time');
+        this.colorDark1Location = this.gl.getUniformLocation(this.program, 'u_color_dark1');
+        this.colorDark2Location = this.gl.getUniformLocation(this.program, 'u_color_dark2');
+        this.colorLight1Location = this.gl.getUniformLocation(this.program, 'u_color_light1');
+        this.colorLight2Location = this.gl.getUniformLocation(this.program, 'u_color_light2');
+        this.bgPowerLocation = this.gl.getUniformLocation(this.program, 'u_BG_POWER');
+
+        this.startTime = Date.now();
+    }
+
+    createBuffer(data) {
+        const buffer = this.gl.createBuffer();
+        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, buffer);
+        this.gl.bufferData(this.gl.ARRAY_BUFFER, data, this.gl.STATIC_DRAW);
+        return buffer;
+    }
+
+    createShaderProgram(vertexSource, fragmentSource) {
+        const vertexShader = this.createShader(this.gl.VERTEX_SHADER, vertexSource);
+        const fragmentShader = this.createShader(this.gl.FRAGMENT_SHADER, fragmentSource);
+        
+        const program = this.gl.createProgram();
+        this.gl.attachShader(program, vertexShader);
+        this.gl.attachShader(program, fragmentShader);
+        this.gl.linkProgram(program);
+        
+        if (!this.gl.getProgramParameter(program, this.gl.LINK_STATUS)) {
+            console.error('Unable to initialize shader program:', this.gl.getProgramInfoLog(program));
+            return null;
+        }
+        
+        return program;
+    }
+
+    createShader(type, source) {
+        const shader = this.gl.createShader(type);
+        this.gl.shaderSource(shader, source);
+        this.gl.compileShader(shader);
+        
+        if (!this.gl.getShaderParameter(shader, this.gl.COMPILE_STATUS)) {
+            console.error('Shader compile error:', this.gl.getShaderInfoLog(shader));
+            this.gl.deleteShader(shader);
+            return null;
+        }
+        
+        return shader;
+    }
+
+    setupGUI() {
+        // Only setup if dat.gui is available
+        if (window.dat) {
+            this.gui = new dat.GUI({ autoPlace: false });
+            this.gui.domElement.style.display = 'none';
+            this.container.appendChild(this.gui.domElement);
+
+            const colors = this.gui.addFolder('Colors');
+            colors.addColor(this.options.colors, 'dark1');
+            colors.addColor(this.options.colors, 'dark2');
+            colors.addColor(this.options.colors, 'light1');
+            colors.addColor(this.options.colors, 'light2');
+            
+            this.gui.add(this.options, 'bgPower', 0.1, 2.0);
+            colors.open();
+        }
+    }
+
+    toggleGUI() {
+        if (this.gui) {
+            const isHidden = this.gui.domElement.style.display === 'none';
+            this.gui.domElement.style.display = isHidden ? 'block' : 'none';
+        }
+    }
+
+    resize() {
+        const rect = this.container.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        this.canvas.width = rect.width * dpr;
+        this.canvas.height = rect.height * dpr;
+        this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+    }
+
+    render() {
+        // Clear and set program
+        this.gl.clearColor(0, 0, 0, 1);
+        this.gl.clear(this.gl.COLOR_BUFFER_BIT);
+        this.gl.useProgram(this.program);
+
+        // Set attributes
+        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.positionBuffer);
+        this.gl.enableVertexAttribArray(this.positionLocation);
+        this.gl.vertexAttribPointer(this.positionLocation, 2, this.gl.FLOAT, false, 0, 0);
+
+        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.uvBuffer);
+        this.gl.enableVertexAttribArray(this.uvLocation);
+        this.gl.vertexAttribPointer(this.uvLocation, 2, this.gl.FLOAT, false, 0, 0);
+
+        // Update uniforms
+        const time = (Date.now() - this.startTime) * 0.001;
+        this.gl.uniform1f(this.timeLocation, time);
+        
+        this.gl.uniform3fv(this.colorDark1Location, this.options.colors.dark1);
+        this.gl.uniform3fv(this.colorDark2Location, this.options.colors.dark2);
+        this.gl.uniform3fv(this.colorLight1Location, this.options.colors.light1);
+        this.gl.uniform3fv(this.colorLight2Location, this.options.colors.light2);
+        this.gl.uniform1f(this.bgPowerLocation, this.options.bgPower);
+
+        // Draw
+        this.gl.drawArrays(this.gl.TRIANGLE_STRIP, 0, 4);
+
+        // Request next frame
+        requestAnimationFrame(() => this.render());
+    }
+}
+
+// Export for both module and global usage
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = GradientBackground;
+} else {
+    window.GradientBackground = GradientBackground;
+}
