@@ -1,3 +1,5 @@
+console.log('Script updated: 2024-04-11 15:30:00');
+
 // Gradient background with optional sparkles
 class GradientBackground {
     constructor(container, options = {}) {
@@ -140,7 +142,10 @@ class GradientBackground {
                 }
 
                 void main() {
-                    float ns = smoothstep(0., 1., simplex3d(vec3(v_uv * 0.8 + u_time * 0.2, u_time * 0.3)));
+                    // Slow down the UV animation
+                    float uvScale = 0.3;  // Reduce the overall movement scale
+                    float timeScale = 0.1; // Reduce the time impact
+                    float ns = smoothstep(0., 1., simplex3d(vec3(v_uv * uvScale + u_time * timeScale, u_time * timeScale * 0.5)));
                     float dist = distance(v_uv, vec2(0., .7));
                     dist = smoothstep(0.2, 1., dist);
                     float grad = ns * dist;
@@ -370,7 +375,7 @@ class GradientBackground {
 
         // Calculate the actual animation speed from the 0-10 range
         const computedSpeed = this.calculateAnimationSpeed(this.options.animationSpeed);
-        const time = 0;//(Date.now() - this.startTime) * 0.001 * computedSpeed;
+        const time = (Date.now() - this.startTime) * 0.001 * computedSpeed;
         this.gl.uniform1f(this.timeLocation, time);
         
         this.gl.uniform3fv(this.colorDark1Location, this.options.colors.dark1);
@@ -412,27 +417,23 @@ class GradientBackground {
         }
     }
 
-    // Add new method for speed calculation
+    // Fix the speed calculation method:
     calculateAnimationSpeed(value) {
         // Ensure value is between 0 and 10
         const clampedValue = Math.max(0, Math.min(10, value));
         
-        // Non-linear scaling based on ranges:
-        // 0-3: Extra slow (exponential scaling)
-        // 3-7: Normal range (linear scaling)
-        // 7-10: Fast range (exponential scaling)
+        if (clampedValue === 0) return 0;
         
+        // Non-linear scaling with better control:
         if (clampedValue <= 3) {
-            // Exponential scaling for slow speeds (0-3 → 0.00001-0.001)
-            return 0.00001 * Math.pow(100, clampedValue / 3);
+            // Extra slow (0-3)
+            return 0.001 * (clampedValue / 3);
         } else if (clampedValue <= 7) {
-            // Linear scaling for medium speeds (3-7 → 0.001-0.01)
-            const normalizedValue = (clampedValue - 3) / 4;
-            return 0.001 + (normalizedValue * 0.009);
+            // Normal range (3-7)
+            return 0.001 + (0.009 * ((clampedValue - 3) / 4));
         } else {
-            // Exponential scaling for fast speeds (7-10 → 0.01-0.1)
-            const normalizedValue = (clampedValue - 7) / 3;
-            return 0.01 * Math.pow(10, normalizedValue);
+            // Fast range (7-10)
+            return 0.01 + (0.09 * ((clampedValue - 7) / 3));
         }
     }
 }
