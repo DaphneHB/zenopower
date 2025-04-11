@@ -370,7 +370,7 @@ class GradientBackground {
 
         // Calculate the actual animation speed from the 0-10 range
         const computedSpeed = this.calculateAnimationSpeed(this.options.animationSpeed);
-        const time = (Date.now() - this.startTime) * 0.001 * computedSpeed;
+        const time = 0;//(Date.now() - this.startTime) * 0.001 * computedSpeed;
         this.gl.uniform1f(this.timeLocation, time);
         
         this.gl.uniform3fv(this.colorDark1Location, this.options.colors.dark1);
