@@ -12,7 +12,7 @@ class GradientBackground {
                 light2: [0xc4/255, 0xdc/255, 0xe5/255]
             },
             bgPower: 1.8, // Increased brightness
-            animationSpeed: 0.2, // Nouvelle option pour la vitesse
+            animationSpeed: 3, // Default speed on 0-10 scale
             darkMix: 0.4, // Contrôle du mix entre couleurs claires et sombres
             ...options
         };
@@ -268,60 +268,61 @@ class GradientBackground {
         try {
             this.gui = new dat.GUI({ 
                 autoPlace: false,
-                width: 280 // Set a reasonable width
+                width: 300
             });
             
-            // Style the GUI
+            // Style the GUI container
+            const guiContainer = document.createElement('div');
+            guiContainer.style.position = 'fixed';
+            guiContainer.style.top = '20px';
+            guiContainer.style.right = '20px';
+            guiContainer.style.zIndex = '10000';
+            document.body.appendChild(guiContainer);
+            guiContainer.appendChild(this.gui.domElement);
+
+            // Hide GUI initially
             this.gui.domElement.style.display = 'none';
-            this.gui.domElement.style.position = 'fixed';
-            this.gui.domElement.style.top = '10px';
-            this.gui.domElement.style.right = '10px';
-            this.gui.domElement.style.left = 'auto';
-            this.gui.domElement.style.zIndex = '1000';
             
-            // Add custom CSS to fix dat.gui styling
+            // Add custom CSS
             const style = document.createElement('style');
             style.textContent = `
                 .dg.main {
-                    font: 11px 'Lucida Grande', sans-serif;
-                    background-color: #1a1a1a;
-                    color: #ebebeb;
-                    text-shadow: none;
-                    border-radius: 4px;
+                    font: 11px 'Lucida Grande', sans-serif !important;
+                    background: rgba(0, 0, 0, 0.8) !important;
+                    text-shadow: none !important;
+                    border-radius: 4px !important;
                 }
                 .dg.main .close-button {
-                    display: none;
+                    display: none !important;
                 }
-                .dg.main .slider {
-                    margin-left: 0;
+                .dg .cr.number {
+                    border-left: 3px solid #2FA1D6 !important;
                 }
-                .dg .c input[type=text] {
-                    background: #303030;
-                    border: none;
-                    border-radius: 2px;
-                    color: #ffffff;
-                }
-                .dg .property-name {
-                    width: 40%;
+                .dg .cr.number input[type=text] {
+                    color: #2FA1D6 !important;
                 }
                 .dg .c .slider {
-                    background: #303030;
-                    cursor: ew-resize;
+                    background: #262626 !important;
+                    cursor: ew-resize !important;
+                }
+                .dg .c .slider:hover {
+                    background: #3a3a3a !important;
+                }
+                .dg .c .slider-fg {
+                    background: #2FA1D6 !important;
                 }
             `;
             document.head.appendChild(style);
-            
-            document.body.appendChild(this.gui.domElement);
 
             const colors = this.gui.addFolder('Colors');
-            colors.addColor(this.options.colors, 'dark1').name('Dark 1').onChange(() => this.render());
-            colors.addColor(this.options.colors, 'dark2').name('Dark 2').onChange(() => this.render());
-            colors.addColor(this.options.colors, 'light1').name('Light 1').onChange(() => this.render());
-            colors.addColor(this.options.colors, 'light2').name('Light 2').onChange(() => this.render());
+            colors.addColor(this.options.colors, 'dark1').name('Dark 1');
+            colors.addColor(this.options.colors, 'dark2').name('Dark 2');
+            colors.addColor(this.options.colors, 'light1').name('Light 1');
+            colors.addColor(this.options.colors, 'light2').name('Light 2');
             
             const controls = this.gui.addFolder('Controls');
             controls.add(this.options, 'bgPower', 0.1, 2.0, 0.1).name('Brightness');
-            controls.add(this.options, 'animationSpeed', 0.001, 0.1, 0.001).name('Speed');
+            controls.add(this.options, 'animationSpeed', 0, 10, 0.1).name('Speed (0-10)');
             controls.add(this.options, 'darkMix', 0, 1, 0.1).name('Dark Mix');
             
             colors.open();
@@ -367,9 +368,9 @@ class GradientBackground {
             this.gl.vertexAttribPointer(this.uvLocation, 2, this.gl.FLOAT, false, 0, 0);
         }
 
-        // Slow down the time calculation significantly
-        const timeScale = 0.05; // Additional time scaling factor
-        const time = (Date.now() - this.startTime) * 0.001 * this.options.animationSpeed * timeScale;
+        // Calculate the actual animation speed from the 0-10 range
+        const computedSpeed = this.calculateAnimationSpeed(this.options.animationSpeed);
+        const time = (Date.now() - this.startTime) * 0.001 * computedSpeed;
         this.gl.uniform1f(this.timeLocation, time);
         
         this.gl.uniform3fv(this.colorDark1Location, this.options.colors.dark1);
@@ -408,6 +409,30 @@ class GradientBackground {
 
         if (this.canvas && this.canvas.parentNode) {
             this.canvas.parentNode.removeChild(this.canvas);
+        }
+    }
+
+    // Add new method for speed calculation
+    calculateAnimationSpeed(value) {
+        // Ensure value is between 0 and 10
+        const clampedValue = Math.max(0, Math.min(10, value));
+        
+        // Non-linear scaling based on ranges:
+        // 0-3: Extra slow (exponential scaling)
+        // 3-7: Normal range (linear scaling)
+        // 7-10: Fast range (exponential scaling)
+        
+        if (clampedValue <= 3) {
+            // Exponential scaling for slow speeds (0-3 → 0.00001-0.001)
+            return 0.00001 * Math.pow(100, clampedValue / 3);
+        } else if (clampedValue <= 7) {
+            // Linear scaling for medium speeds (3-7 → 0.001-0.01)
+            const normalizedValue = (clampedValue - 3) / 4;
+            return 0.001 + (normalizedValue * 0.009);
+        } else {
+            // Exponential scaling for fast speeds (7-10 → 0.01-0.1)
+            const normalizedValue = (clampedValue - 7) / 3;
+            return 0.01 * Math.pow(10, normalizedValue);
         }
     }
 }
