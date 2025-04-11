@@ -1,16 +1,17 @@
 // Gradient background with optional sparkles
 class GradientBackground {
     constructor(container, options = {}) {
-        // Default options
+        // Default options with new colors
         this.options = {
             useSparkles: false,
             colors: {
-                dark1: [0.1, 0.1, 0.2],
-                dark2: [0.15, 0.15, 0.25],
-                light1: [0.4, 0.4, 0.8],
-                light2: [0.5, 0.5, 0.9]
+                // Convert hex colors to RGB arrays (0-1 range)
+                dark1: [0x0d/255, 0x15/255, 0x1b/255],
+                dark2: [0x71/255, 0xa3/255, 0xb0/255],
+                light1: [0xf7/255, 0xfa/255, 0xfc/255],
+                light2: [0xc4/255, 0xdc/255, 0xe5/255]
             },
-            bgPower: 1.2,
+            bgPower: 1.8, // Increased brightness
             ...options
         };
 
@@ -60,149 +61,66 @@ class GradientBackground {
         });
     }
 
-    init() {
-        // Vertex shader
-        const vertexShaderSource = 
-            'attribute vec2 position;' +
-            'attribute vec2 uv;' +
-            'varying vec2 v_uv;' +
-            'void main() {' +
-            '    gl_Position = vec4(position, 0, 1);' +
-            '    v_uv = uv;' +
-            '}';
+    async init() {
+        try {
+            // Load shader files
+            const vertexResponse = await fetch('/src/gl/screen/vertex.vert');
+            const fragmentResponse = await fetch('/src/gl/screen/fragment.frag');
+            
+            if (!vertexResponse.ok || !fragmentResponse.ok) {
+                throw new Error('Failed to load shader files');
+            }
+    
+            const vertexShaderSource = await vertexResponse.text();
+            const fragmentShaderSource = await fragmentResponse.text();
+    
+            // Create shader program
+            this.program = this.createShaderProgram(vertexShaderSource, fragmentShaderSource);
+            
+            if (!this.program) {
+                console.error('Failed to create shader program');
+                return;
+            }
+            
+            // Create buffers
+            const positions = new Float32Array([
+                -1, -1,
+                1, -1,
+                -1, 1,
+                1, 1
+            ]);
+            
+            const uvs = new Float32Array([
+                0, 0,
+                1, 0,
+                0, 1,
+                1, 1
+            ]);
 
-        // Fragment shader
-        const fragmentShaderSource = 
-            'precision highp float;' +
+            // Setup attributes and uniforms
+            this.positionBuffer = this.createBuffer(positions);
+            this.uvBuffer = this.createBuffer(uvs);
             
-            // Simplex noise implementation
-            'vec4 permute(vec4 x) { return mod(((x * 34.0) + 1.0) * x, 289.0); }' +
-            'vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }' +
+            this.positionLocation = this.gl.getAttribLocation(this.program, 'position');
+            this.uvLocation = this.gl.getAttribLocation(this.program, 'uv');
             
-            'float simplex3d(vec3 v) {' +
-            '    const vec2 C = vec2(1.0/6.0, 1.0/3.0);' +
-            '    const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);' +
-            
-            '    vec3 i  = floor(v + dot(v, C.yyy));' +
-            '    vec3 x0 = v - i + dot(i, C.xxx);' +
-            
-            '    vec3 g = step(x0.yzx, x0.xyz);' +
-            '    vec3 l = 1.0 - g;' +
-            '    vec3 i1 = min(g.xyz, l.zxy);' +
-            '    vec3 i2 = max(g.xyz, l.zxy);' +
-            
-            '    vec3 x1 = x0 - i1 + C.xxx;' +
-            '    vec3 x2 = x0 - i2 + C.yyy;' +
-            '    vec3 x3 = x0 - D.yyy;' +
-            
-            '    i = mod(i, 289.0);' +
-            '    vec4 p = permute(permute(permute(' +
-            '            i.z + vec4(0.0, i1.z, i2.z, 1.0))' +
-            '            + i.y + vec4(0.0, i1.y, i2.y, 1.0))' +
-            '            + i.x + vec4(0.0, i1.x, i2.x, 1.0));' +
-            
-            '    float n_ = 1.0/7.0;' +
-            '    vec3 ns = n_ * D.wyz - D.xzx;' +
-            
-            '    vec4 j = p - 49.0 * floor(p * ns.z * ns.z);' +
-            
-            '    vec4 x_ = floor(j * ns.z);' +
-            '    vec4 y_ = floor(j - 7.0 * x_);' +
-            
-            '    vec4 x = x_ *ns.x + ns.yyyy;' +
-            '    vec4 y = y_ *ns.x + ns.yyyy;' +
-            '    vec4 h = 1.0 - abs(x) - abs(y);' +
-            
-            '    vec4 b0 = vec4(x.xy, y.xy);' +
-            '    vec4 b1 = vec4(x.zw, y.zw);' +
-            
-            '    vec4 s0 = floor(b0)*2.0 + 1.0;' +
-            '    vec4 s1 = floor(b1)*2.0 + 1.0;' +
-            '    vec4 sh = -step(h, vec4(0.0));' +
-            
-            '    vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy;' +
-            '    vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww;' +
-            
-            '    vec3 p0 = vec3(a0.xy,h.x);' +
-            '    vec3 p1 = vec3(a0.zw,h.y);' +
-            '    vec3 p2 = vec3(a1.xy,h.z);' +
-            '    vec3 p3 = vec3(a1.zw,h.w);' +
-            
-            '    vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2, p2), dot(p3,p3)));' +
-            '    p0 *= norm.x;' +
-            '    p1 *= norm.y;' +
-            '    p2 *= norm.z;' +
-            '    p3 *= norm.w;' +
-            
-            '    vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);' +
-            '    m = m * m;' +
-            '    return 42.0 * dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));' +
-            '}' +
+            // Get uniform locations
+            this.timeLocation = this.gl.getUniformLocation(this.program, 'u_time');
+            this.colorDark1Location = this.gl.getUniformLocation(this.program, 'u_color_dark1');
+            this.colorDark2Location = this.gl.getUniformLocation(this.program, 'u_color_dark2');
+            this.colorLight1Location = this.gl.getUniformLocation(this.program, 'u_color_light1');
+            this.colorLight2Location = this.gl.getUniformLocation(this.program, 'u_color_light2');
+            this.bgPowerLocation = this.gl.getUniformLocation(this.program, 'u_BG_POWER');
 
-            'uniform float u_time;' +
-            'uniform vec3 u_color_dark1;' +
-            'uniform vec3 u_color_dark2;' +
-            'uniform vec3 u_color_light1;' +
-            'uniform vec3 u_color_light2;' +
-            'uniform float u_BG_POWER;' +
-            'varying vec2 v_uv;' +
-
-            'void main() {' +
-            '    float ns = smoothstep(0., 1., simplex3d(vec3(v_uv * 1. + u_time, u_time * 1.5)));' +
-            '    float dist = distance(v_uv, vec2(0., .7));' +
-            '    dist = smoothstep(0.1, 1., dist);' +
-            '    float grad = ns * dist;' +
+            this.startTime = Date.now();
             
-            '    vec3 col1 = mix(u_color_dark1 * 1.2, u_color_dark2, grad);' +
-            '    vec3 col2 = mix(u_color_light1, u_color_light2, grad);' +
-            '    vec3 color = mix(col2 * u_BG_POWER, col1, 0.5);' +
-            
-            '    gl_FragColor = vec4(color, 1.0);' +
-            '}';
-
-        // Create shader program
-        this.program = this.createShaderProgram(vertexShaderSource, fragmentShaderSource);
-        
-        if (!this.program) {
-            console.error('Failed to create shader program');
+            // Enable alpha blending
+            this.gl.enable(this.gl.BLEND);
+            this.gl.blendFunc(this.gl.SRC_ALPHA, this.gl.ONE_MINUS_SRC_ALPHA);
+        } catch (error) {
+            console.error('Error initializing WebGL:', error);
             return;
-        }
-        
-        // Create buffers
-        const positions = new Float32Array([
-            -1, -1,
-            1, -1,
-            -1, 1,
-            1, 1
-        ]);
-        
-        const uvs = new Float32Array([
-            0, 0,
-            1, 0,
-            0, 1,
-            1, 1
-        ]);
-
-        // Setup attributes and uniforms
-        this.positionBuffer = this.createBuffer(positions);
-        this.uvBuffer = this.createBuffer(uvs);
-        
-        this.positionLocation = this.gl.getAttribLocation(this.program, 'position');
-        this.uvLocation = this.gl.getAttribLocation(this.program, 'uv');
-        
-        // Get uniform locations
-        this.timeLocation = this.gl.getUniformLocation(this.program, 'u_time');
-        this.colorDark1Location = this.gl.getUniformLocation(this.program, 'u_color_dark1');
-        this.colorDark2Location = this.gl.getUniformLocation(this.program, 'u_color_dark2');
-        this.colorLight1Location = this.gl.getUniformLocation(this.program, 'u_color_light1');
-        this.colorLight2Location = this.gl.getUniformLocation(this.program, 'u_color_light2');
-        this.bgPowerLocation = this.gl.getUniformLocation(this.program, 'u_BG_POWER');
-
-        this.startTime = Date.now();
-        
-        // Enable alpha blending
-        this.gl.enable(this.gl.BLEND);
-        this.gl.blendFunc(this.gl.SRC_ALPHA, this.gl.ONE_MINUS_SRC_ALPHA);
+        } 
     }
 
     createBuffer(data) {
