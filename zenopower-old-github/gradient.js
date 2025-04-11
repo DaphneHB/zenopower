@@ -1,4 +1,4 @@
-console.log('Script updated: 2024-04-11 15:30:00');
+console.log('Script updated: 2024-04-11 22:00:00');
 
 // Gradient background with optional sparkles
 class GradientBackground {
@@ -131,7 +131,7 @@ class GradientBackground {
                     vec3 p1 = vec3(a0.zw,h.y);
                     vec3 p2 = vec3(a1.xy,h.z);
                     vec3 p3 = vec3(a1.zw,h.w);
-                    vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2, p2), dot(p3,p3)));
+                    vec4 norm = 0;//taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2, p2), dot(p3,p3)));
                     p0 *= norm.x;
                     p1 *= norm.y;
                     p2 *= norm.z;
@@ -148,7 +148,7 @@ class GradientBackground {
                     float ns = smoothstep(0., 1., simplex3d(vec3(v_uv * uvScale + u_time * timeScale, u_time * timeScale * 0.5)));
                     float dist = distance(v_uv, vec2(0., .7));
                     dist = smoothstep(0.2, 1., dist);
-                    float grad = 0;//ns * dist;
+                    float grad = ns * dist;
                     
                     vec3 col1 = mix(u_color_dark1 * 1.2, u_color_dark2, grad);
                     vec3 col2 = mix(u_color_light1, u_color_light2, grad);
