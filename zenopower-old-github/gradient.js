@@ -1,8 +1,8 @@
-console.log('Script updated: 2024-04-11 22:00:00');
-
 // Gradient background with optional sparkles
 class GradientBackground {
     constructor(container, options = {}) {
+        console.log('Script updated: 2024-04-11 22:00:00');
+        console.log('GradientBackground initialized with options:', options);
         // Default options with new colors
         this.options = {
             useSparkles: false,
