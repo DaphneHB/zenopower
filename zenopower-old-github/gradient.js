@@ -1,21 +1,19 @@
-// Gradient background with optional sparkles
+console.log('Script updated: 2024-04-11 22:45:00');
+
 class GradientBackground {
     constructor(container, options = {}) {
-        console.log('Script updated: 2024-04-11 22:00:00');
-        console.log('GradientBackground initialized with options:', options);
-        // Default options with new colors
+        // Default options with new parameters
         this.options = {
             useSparkles: false,
             colors: {
-                // Convert hex colors to RGB arrays (0-1 range)
                 dark1: [0x0d/255, 0x15/255, 0x1b/255],
                 dark2: [0x71/255, 0xa3/255, 0xb0/255],
                 light1: [0xf7/255, 0xfa/255, 0xfc/255],
                 light2: [0xc4/255, 0xdc/255, 0xe5/255]
             },
-            bgPower: 1.8, // Increased brightness
+            bgPower: 1.8,
             animationSpeed: 3, // Default speed on 0-10 scale
-            darkMix: 0.4, // Contrôle du mix entre couleurs claires et sombres
+            darkMix: 0.4,
             ...options
         };
 
@@ -26,16 +24,16 @@ class GradientBackground {
         this.canvas.style.left = '0';
         this.canvas.style.width = '100%';
         this.canvas.style.height = '100%';
-        
+
         // Find or create container
-        this.container = typeof container === 'string' ? 
+        this.container = typeof container === 'string' ?
             document.querySelector(container) : container;
-            
+
         if (!this.container) {
             console.error('Container not found');
             return;
         }
-        
+
         this.container.style.position = 'relative';
         this.container.appendChild(this.canvas);
 
@@ -45,7 +43,7 @@ class GradientBackground {
             alpha: true,
             premultipliedAlpha: false
         }) || this.canvas.getContext('experimental-webgl');
-        
+
         if (!this.gl) {
             console.error('WebGL not supported');
             return;
@@ -65,147 +63,137 @@ class GradientBackground {
         });
     }
 
-    async init() {
-        try {
-            // Charger les shaders depuis les fichiers
-            const vertexSource = `
-                attribute vec2 position;
-                attribute vec2 uv;
-                varying vec2 v_uv;
-                
-                void main() {
-                    gl_Position = vec4(position, 0, 1);
-                    v_uv = uv;
-                }
-            `;
+    init() {
+        // Vertex shader
+        const vertexShaderSource =
+            'attribute vec2 position;\n' +
+            'attribute vec2 uv;\n' +
+            'varying vec2 v_uv;\n' +
+            'void main() {\n' +
+            '    gl_Position = vec4(position, 0, 1);\n' +
+            '    v_uv = uv;\n' +
+            '}\n';
 
-            const fragmentSource = `
-                precision highp float;
-                
-                uniform float u_time;
-                uniform vec3 u_color_dark1;
-                uniform vec3 u_color_dark2;
-                uniform vec3 u_color_light1;
-                uniform vec3 u_color_light2;
-                uniform float u_BG_POWER;
-                uniform float u_dark_mix;
-                varying vec2 v_uv;
+        // Fragment shader
+        const fragmentShaderSource =
+            'precision highp float;\n' +
+            
+            'vec4 permute(vec4 x) { return mod(((x * 34.0) + 1.0) * x, 289.0); }\n' +
+            'vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }\n' +
+            
+            'float simplex3d(vec3 v) {\n' +
+            '    const vec2 C = vec2(1.0/6.0, 1.0/3.0);\n' +
+            '    const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);\n' +
+            '    vec3 i  = floor(v + dot(v, C.yyy));\n' +
+            '    vec3 x0 = v - i + dot(i, C.xxx);\n' +
+            '    vec3 g = step(x0.yzx, x0.xyz);\n' +
+            '    vec3 l = 1.0 - g;\n' +
+            '    vec3 i1 = min(g.xyz, l.zxy);\n' +
+            '    vec3 i2 = max(g.xyz, l.zxy);\n' +
+            '    vec3 x1 = x0 - i1 + C.xxx;\n' +
+            '    vec3 x2 = x0 - i2 + C.yyy;\n' +
+            '    vec3 x3 = x0 - D.yyy;\n' +
+            '    i = mod(i, 289.0);\n' +
+            '    vec4 p = permute(permute(permute(\n' +
+            '            i.z + vec4(0.0, i1.z, i2.z, 1.0))\n' +
+            '            + i.y + vec4(0.0, i1.y, i2.y, 1.0))\n' +
+            '            + i.x + vec4(0.0, i1.x, i2.x, 1.0));\n' +
+            '    float n_ = 1.0/7.0;\n' +
+            '    vec3 ns = n_ * D.wyz - D.xzx;\n' +
+            '    vec4 j = p - 49.0 * floor(p * ns.z * ns.z);\n' +
+            '    vec4 x_ = floor(j * ns.z);\n' +
+            '    vec4 y_ = floor(j - 7.0 * x_);\n' +
+            '    vec4 x = x_ *ns.x + ns.yyyy;\n' +
+            '    vec4 y = y_ *ns.x + ns.yyyy;\n' +
+            '    vec4 h = 1.0 - abs(x) - abs(y);\n' +
+            '    vec4 b0 = vec4(x.xy, y.xy);\n' +
+            '    vec4 b1 = vec4(x.zw, y.zw);\n' +
+            '    vec4 s0 = floor(b0)*2.0 + 1.0;\n' +
+            '    vec4 s1 = floor(b1)*2.0 + 1.0;\n' +
+            '    vec4 sh = -step(h, vec4(0.0));\n' +
+            '    vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy;\n' +
+            '    vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww;\n' +
+            '    vec3 p0 = vec3(a0.xy,h.x);\n' +
+            '    vec3 p1 = vec3(a0.zw,h.y);\n' +
+            '    vec3 p2 = vec3(a1.xy,h.z);\n' +
+            '    vec3 p3 = vec3(a1.zw,h.w);\n' +
+            '    vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2, p2), dot(p3,p3)));\n' +
+            '    p0 *= norm.x;\n' +
+            '    p1 *= norm.y;\n' +
+            '    p2 *= norm.z;\n' +
+            '    p3 *= norm.w;\n' +
+            '    vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);\n' +
+            '    m = m * m;\n' +
+            '    return 42.0 * dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));\n' +
+            '}\n' +
 
-                // Simplex noise implementation
-                vec4 permute(vec4 x) { return mod(((x * 34.0) + 1.0) * x, 289.0); }
-                vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
-                
-                float simplex3d(vec3 v) {
-                    const vec2 C = vec2(1.0/6.0, 1.0/3.0);
-                    const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
-                    vec3 i  = floor(v + dot(v, C.yyy));
-                    vec3 x0 = v - i + dot(i, C.xxx);
-                    vec3 g = step(x0.yzx, x0.xyz);
-                    vec3 l = 1.0 - g;
-                    vec3 i1 = min(g.xyz, l.zxy);
-                    vec3 i2 = max(g.xyz, l.zxy);
-                    vec3 x1 = x0 - i1 + C.xxx;
-                    vec3 x2 = x0 - i2 + C.yyy;
-                    vec3 x3 = x0 - D.yyy;
-                    i = mod(i, 289.0);
-                    vec4 p = permute(permute(permute(
-                            i.z + vec4(0.0, i1.z, i2.z, 1.0))
-                            + i.y + vec4(0.0, i1.y, i2.y, 1.0))
-                            + i.x + vec4(0.0, i1.x, i2.x, 1.0));
-                    float n_ = 1.0/7.0;
-                    vec3 ns = n_ * D.wyz - D.xzx;
-                    vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
-                    vec4 x_ = floor(j * ns.z);
-                    vec4 y_ = floor(j - 7.0 * x_);
-                    vec4 x = x_ *ns.x + ns.yyyy;
-                    vec4 y = y_ *ns.x + ns.yyyy;
-                    vec4 h = 1.0 - abs(x) - abs(y);
-                    vec4 b0 = vec4(x.xy, y.xy);
-                    vec4 b1 = vec4(x.zw, y.zw);
-                    vec4 s0 = floor(b0)*2.0 + 1.0;
-                    vec4 s1 = floor(b1)*2.0 + 1.0;
-                    vec4 sh = -step(h, vec4(0.0));
-                    vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy;
-                    vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww;
-                    vec3 p0 = vec3(a0.xy,h.x);
-                    vec3 p1 = vec3(a0.zw,h.y);
-                    vec3 p2 = vec3(a1.xy,h.z);
-                    vec3 p3 = vec3(a1.zw,h.w);
-                    vec4 norm = 0;//taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2, p2), dot(p3,p3)));
-                    p0 *= norm.x;
-                    p1 *= norm.y;
-                    p2 *= norm.z;
-                    p3 *= norm.w;
-                    vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
-                    m = m * m;
-                    return 42.0 * dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));
-                }
+            'uniform float u_time;\n' +
+            'uniform vec3 u_color_dark1;\n' +
+            'uniform vec3 u_color_dark2;\n' +
+            'uniform vec3 u_color_light1;\n' +
+            'uniform vec3 u_color_light2;\n' +
+            'uniform float u_BG_POWER;\n' +
+            'varying vec2 v_uv;\n' +
 
-                void main() {
-                    // Slow down the UV animation
-                    float uvScale = 0.3;  // Reduce the overall movement scale
-                    float timeScale = 0.1; // Reduce the time impact
-                    float ns = smoothstep(0., 1., simplex3d(vec3(v_uv * uvScale + u_time * timeScale, u_time * timeScale * 0.5)));
-                    float dist = distance(v_uv, vec2(0., .7));
-                    dist = smoothstep(0.2, 1., dist);
-                    float grad = ns * dist;
-                    
-                    vec3 col1 = mix(u_color_dark1 * 1.2, u_color_dark2, grad);
-                    vec3 col2 = mix(u_color_light1, u_color_light2, grad);
-                    vec3 color = mix(col2 * u_BG_POWER, col1, u_dark_mix);
-                    
-                    gl_FragColor = vec4(color, 1.0);
-                }
-            `;
+            'void main() {\n' +
+            '    vec2 uv = v_uv;\n' +
+            '    float timeScale = 1.5;\n' +
+            '    float noiseScale = 0.8;\n' +
+            '    float t = u_time * timeScale;\n' +
+            '    vec3 noiseInput = vec3(uv * noiseScale, t);\n' +
+            '    float ns = smoothstep(0.2, 0.8, simplex3d(noiseInput));\n' +
+            '    float dist = distance(uv, vec2(0., .7));\n' +
+            '    dist = smoothstep(0.2, 0.8, dist);\n' +
+            '    float grad = ns * dist;\n' +
+            '    vec3 col1 = mix(u_color_dark1 * 1.2, u_color_dark2, grad);\n' +
+            '    vec3 col2 = mix(u_color_light1, u_color_light2, grad);\n' +
+            '    vec3 color = mix(col2 * u_BG_POWER, col1, 0.5);\n' +
+            '    gl_FragColor = vec4(color, 1.0);\n' +
+            '}\n';
 
-            // Create shader program
-            this.program = this.createShaderProgram(vertexSource, fragmentSource);
-            
-            if (!this.program) {
-                console.error('Failed to create shader program');
-                return;
-            }
-            
-            // Create buffers
-            const positions = new Float32Array([
-                -1, -1,
-                1, -1,
-                -1, 1,
-                1, 1
-            ]);
-            
-            const uvs = new Float32Array([
-                0, 0,
-                1, 0,
-                0, 1,
-                1, 1
-            ]);
+        // Create shader program
+        this.program = this.createShaderProgram(vertexShaderSource, fragmentShaderSource);
 
-            // Setup attributes and uniforms
-            this.positionBuffer = this.createBuffer(positions);
-            this.uvBuffer = this.createBuffer(uvs);
-            
-            this.positionLocation = this.gl.getAttribLocation(this.program, 'position');
-            this.uvLocation = this.gl.getAttribLocation(this.program, 'uv');
-            
-            // Get uniform locations
-            this.timeLocation = this.gl.getUniformLocation(this.program, 'u_time');
-            this.colorDark1Location = this.gl.getUniformLocation(this.program, 'u_color_dark1');
-            this.colorDark2Location = this.gl.getUniformLocation(this.program, 'u_color_dark2');
-            this.colorLight1Location = this.gl.getUniformLocation(this.program, 'u_color_light1');
-            this.colorLight2Location = this.gl.getUniformLocation(this.program, 'u_color_light2');
-            this.bgPowerLocation = this.gl.getUniformLocation(this.program, 'u_BG_POWER');
-            this.darkMixLocation = this.gl.getUniformLocation(this.program, 'u_dark_mix');
-
-            this.startTime = Date.now();
-            
-            // Enable alpha blending
-            this.gl.enable(this.gl.BLEND);
-            this.gl.blendFunc(this.gl.SRC_ALPHA, this.gl.ONE_MINUS_SRC_ALPHA);
-        } catch (error) {
-            console.error('Error initializing WebGL:', error);
+        if (!this.program) {
+            console.error('Failed to create shader program');
             return;
-        } 
+        }
+
+        // Create buffers
+        const positions = new Float32Array([
+            -1, -1,
+            1, -1,
+            -1, 1,
+            1, 1
+        ]);
+
+        const uvs = new Float32Array([
+            0, 0,
+            1, 0,
+            0, 1,
+            1, 1
+        ]);
+
+        // Setup attributes and uniforms
+        this.positionBuffer = this.createBuffer(positions);
+        this.uvBuffer = this.createBuffer(uvs);
+
+        this.positionLocation = this.gl.getAttribLocation(this.program, 'position');
+        this.uvLocation = this.gl.getAttribLocation(this.program, 'uv');
+
+        // Get uniform locations
+        this.timeLocation = this.gl.getUniformLocation(this.program, 'u_time');
+        this.colorDark1Location = this.gl.getUniformLocation(this.program, 'u_color_dark1');
+        this.colorDark2Location = this.gl.getUniformLocation(this.program, 'u_color_dark2');
+        this.colorLight1Location = this.gl.getUniformLocation(this.program, 'u_color_light1');
+        this.colorLight2Location = this.gl.getUniformLocation(this.program, 'u_color_light2');
+        this.bgPowerLocation = this.gl.getUniformLocation(this.program, 'u_BG_POWER');
+
+        this.startTime = Date.now();
+
+        // Enable alpha blending
+        this.gl.enable(this.gl.BLEND);
+        this.gl.blendFunc(this.gl.SRC_ALPHA, this.gl.ONE_MINUS_SRC_ALPHA);
     }
 
     createBuffer(data) {
@@ -225,133 +213,62 @@ class GradientBackground {
             console.error('Failed to create shader');
             return null;
         }
-        
+
         this.gl.shaderSource(shader, source);
         this.gl.compileShader(shader);
-        
+
         if (!this.gl.getShaderParameter(shader, this.gl.COMPILE_STATUS)) {
             console.error('Shader compile error:', this.gl.getShaderInfoLog(shader));
             this.gl.deleteShader(shader);
             return null;
         }
-        
+
         return shader;
     }
 
     createShaderProgram(vertexSource, fragmentSource) {
         const vertexShader = this.createShader(this.gl.VERTEX_SHADER, vertexSource);
         const fragmentShader = this.createShader(this.gl.FRAGMENT_SHADER, fragmentSource);
-        
+
         if (!vertexShader || !fragmentShader) {
             return null;
         }
-        
+
         const program = this.gl.createProgram();
         if (!program) {
             console.error('Failed to create program');
             return null;
         }
-        
+
         this.gl.attachShader(program, vertexShader);
         this.gl.attachShader(program, fragmentShader);
         this.gl.linkProgram(program);
-        
+
         if (!this.gl.getProgramParameter(program, this.gl.LINK_STATUS)) {
             console.error('Unable to initialize shader program:', this.gl.getProgramInfoLog(program));
             return null;
         }
-        
+
         return program;
     }
 
-    setupGUI() {
-        if (!window.dat) {
-            console.warn('dat.gui not found, skipping GUI setup');
-            return;
-        }
+    calculateAnimationSpeed(value) {
+        // Ensure value is between 0 and 10
+        const clampedValue = Math.max(0, Math.min(10, value));
         
-        try {
-            this.gui = new dat.GUI({ 
-                autoPlace: false,
-                width: 300
-            });
-            
-            // Style the GUI container
-            const guiContainer = document.createElement('div');
-            guiContainer.style.position = 'fixed';
-            guiContainer.style.top = '20px';
-            guiContainer.style.right = '20px';
-            guiContainer.style.zIndex = '10000';
-            document.body.appendChild(guiContainer);
-            guiContainer.appendChild(this.gui.domElement);
-
-            // Hide GUI initially
-            this.gui.domElement.style.display = 'none';
-            
-            // Add custom CSS
-            const style = document.createElement('style');
-            style.textContent = `
-                .dg.main {
-                    font: 11px 'Lucida Grande', sans-serif !important;
-                    background: rgba(0, 0, 0, 0.8) !important;
-                    text-shadow: none !important;
-                    border-radius: 4px !important;
-                }
-                .dg.main .close-button {
-                    display: none !important;
-                }
-                .dg .cr.number {
-                    border-left: 3px solid #2FA1D6 !important;
-                }
-                .dg .cr.number input[type=text] {
-                    color: #2FA1D6 !important;
-                }
-                .dg .c .slider {
-                    background: #262626 !important;
-                    cursor: ew-resize !important;
-                }
-                .dg .c .slider:hover {
-                    background: #3a3a3a !important;
-                }
-                .dg .c .slider-fg {
-                    background: #2FA1D6 !important;
-                }
-            `;
-            document.head.appendChild(style);
-
-            const colors = this.gui.addFolder('Colors');
-            colors.addColor(this.options.colors, 'dark1').name('Dark 1');
-            colors.addColor(this.options.colors, 'dark2').name('Dark 2');
-            colors.addColor(this.options.colors, 'light1').name('Light 1');
-            colors.addColor(this.options.colors, 'light2').name('Light 2');
-            
-            const controls = this.gui.addFolder('Controls');
-            controls.add(this.options, 'bgPower', 0.1, 2.0, 0.1).name('Brightness');
-            controls.add(this.options, 'animationSpeed', 0, 10, 0.1).name('Speed (0-10)');
-            controls.add(this.options, 'darkMix', 0, 1, 0.1).name('Dark Mix');
-            
-            colors.open();
-            controls.open();
-        } catch (error) {
-            console.error('Error setting up GUI:', error);
-        }
-    }
-
-    toggleGUI() {
-        if (this.gui) {
-            const isHidden = this.gui.domElement.style.display === 'none';
-            this.gui.domElement.style.display = isHidden ? 'block' : 'none';
-        }
-    }
-
-    resize() {
-        if (!this.canvas || !this.gl) return;
+        if (clampedValue === 0) return 0;
         
-        const rect = this.container.getBoundingClientRect();
-        const dpr = window.devicePixelRatio || 1;
-        this.canvas.width = rect.width * dpr;
-        this.canvas.height = rect.height * dpr;
-        this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+        // Slower, smoother scaling
+        if (clampedValue <= 3) {
+            // Slow (0-3)
+            return 0.015 * clampedValue;
+        } else if (clampedValue <= 7) {
+            // Normal range (3-7)
+            return 0.045 * clampedValue;
+        } else {
+            // Fast range (7-10)
+            return 0.075 * clampedValue;
+        }
     }
 
     render() {
@@ -373,11 +290,13 @@ class GradientBackground {
             this.gl.vertexAttribPointer(this.uvLocation, 2, this.gl.FLOAT, false, 0, 0);
         }
 
-        // Calculate the actual animation speed from the 0-10 range
+        // Calculate time with new speed control
         const computedSpeed = this.calculateAnimationSpeed(this.options.animationSpeed);
-        const time = (Date.now() - this.startTime) * 0.001 * computedSpeed;
+        const time = this.options.animationSpeed === 0 ? 
+            0 : (Date.now() - this.startTime) * 0.001 * computedSpeed;
+
+        // Update uniforms
         this.gl.uniform1f(this.timeLocation, time);
-        
         this.gl.uniform3fv(this.colorDark1Location, this.options.colors.dark1);
         this.gl.uniform3fv(this.colorDark2Location, this.options.colors.dark2);
         this.gl.uniform3fv(this.colorLight1Location, this.options.colors.light1);
@@ -389,6 +308,65 @@ class GradientBackground {
         this.gl.drawArrays(this.gl.TRIANGLE_STRIP, 0, 4);
     }
 
+    setupGUI() {
+        if (!window.dat) {
+            console.warn('dat.gui not found, skipping GUI setup');
+            return;
+        }
+        
+        try {
+            this.gui = new dat.GUI({ 
+                autoPlace: false,
+                width: 300
+            });
+            
+            // Create and style GUI container
+            const guiContainer = document.createElement('div');
+            guiContainer.style.position = 'fixed';
+            guiContainer.style.top = '20px';
+            guiContainer.style.right = '20px';
+            guiContainer.style.zIndex = '10000';
+            document.body.appendChild(guiContainer);
+            guiContainer.appendChild(this.gui.domElement);
+
+            // Hide GUI initially
+            this.gui.domElement.style.display = 'none';
+
+            const colors = this.gui.addFolder('Colors');
+            colors.addColor(this.options.colors, 'dark1').name('Dark 1');
+            colors.addColor(this.options.colors, 'dark2').name('Dark 2');
+            colors.addColor(this.options.colors, 'light1').name('Light 1');
+            colors.addColor(this.options.colors, 'light2').name('Light 2');
+            
+            const controls = this.gui.addFolder('Controls');
+            controls.add(this.options, 'bgPower', 0, 2.0, 0.1).name('Brightness');
+            controls.add(this.options, 'animationSpeed', 0, 10, 0.1).name('Speed');
+            controls.add(this.options, 'darkMix', 0, 1, 0.1).name('Dark Mix');
+            
+            colors.open();
+            controls.open();
+        } catch (error) {
+            console.error('Error setting up GUI:', error);
+        }
+    }
+
+    toggleGUI() {
+        if (this.gui) {
+            const isHidden = this.gui.domElement.style.display === 'none';
+            this.gui.domElement.style.display = isHidden ? 'block' : 'none';
+        }
+    }
+
+    resize() {
+        if (!this.canvas || !this.gl) return;
+
+        const rect = this.container.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        this.canvas.width = rect.width * dpr;
+        this.canvas.height = rect.height * dpr;
+        this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+    }
+
     animate() {
         this.render();
         this.animationFrame = requestAnimationFrame(() => this.animate());
@@ -398,7 +376,7 @@ class GradientBackground {
         if (this.animationFrame) {
             cancelAnimationFrame(this.animationFrame);
         }
-        
+
         if (this.gui) {
             this.gui.destroy();
         }
@@ -414,26 +392,6 @@ class GradientBackground {
 
         if (this.canvas && this.canvas.parentNode) {
             this.canvas.parentNode.removeChild(this.canvas);
-        }
-    }
-
-    // Fix the speed calculation method:
-    calculateAnimationSpeed(value) {
-        // Ensure value is between 0 and 10
-        const clampedValue = Math.max(0, Math.min(10, value));
-        
-        if (clampedValue === 0) return 0;
-        
-        // Non-linear scaling with better control:
-        if (clampedValue <= 3) {
-            // Extra slow (0-3)
-            return 0.001 * (clampedValue / 3);
-        } else if (clampedValue <= 7) {
-            // Normal range (3-7)
-            return 0.001 + (0.009 * ((clampedValue - 3) / 4));
-        } else {
-            // Fast range (7-10)
-            return 0.01 + (0.09 * ((clampedValue - 7) / 3));
         }
     }
 }
