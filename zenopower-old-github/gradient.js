@@ -145,7 +145,7 @@ class GradientBackground {
                     // Slow down the UV animation
                     float uvScale = 0.3;  // Reduce the overall movement scale
                     float timeScale = 0.1; // Reduce the time impact
-                    float ns = smoothstep(0., 1., simplex3d(vec3(v_uv * uvScale + u_time * timeScale, u_time * timeScale * 0.5)));
+                    float ns = smoothstep(0., 1., simplex3d(vec3(v_uv * uvScale + u_time * timeScale, u_time * timeScale * 0.05)));
                     float dist = distance(v_uv, vec2(0., .7));
                     dist = smoothstep(0.2, 1., dist);
                     float grad = ns * dist;
