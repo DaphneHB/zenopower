@@ -1,26 +1,24 @@
-console.log('Script updated: 2024-04-11 22:40:00');
-
+function hexToVec3(hex) {
+  return [
+    ((hex >> 16) & 255) / 255,
+    ((hex >> 8) & 255) / 255,
+    (hex & 255) / 255,
+  ];
+}
+// Gradient background with optional sparkles
 class GradientBackground {
   constructor(container, options = {}) {
-    // Default options with new parameters
+    // Default options
     this.options = {
       useSparkles: false,
       colors: {
-        dark1: [0x0d / 255, 0x15 / 255, 0x1b / 255],
-        dark2: [0x71 / 255, 0xa3 / 255, 0xb0 / 255],
-        light1: [0xf7 / 255, 0xfa / 255, 0xfc / 255],
-        light2: [0xc4 / 255, 0xdc / 255, 0xe5 / 255]
+        dark1: [0.1, 0.1, 0.2],
+        dark2: [0.15, 0.15, 0.25],
+        light1: [0.4, 0.4, 0.8],
+        light2: [0.5, 0.5, 0.9]
       },
-      bgPower: 1.8,
-      animationSpeed: 3,
-      darkMix: 0.4,
+      bgPower: 1.2,
       ...options
-    };
-
-    // Initialize theme observers
-    this.themeObservers = {
-      dark: null,
-      light: null  
     };
 
     // Setup canvas and WebGL
@@ -57,7 +55,6 @@ class GradientBackground {
 
     this.init();
     this.setupGUI();
-    this.setupThemeObservers();
     this.resize();
     this.animate();
 
@@ -68,46 +65,12 @@ class GradientBackground {
         this.toggleGUI();
       }
     });
-  }
 
-  setupThemeObservers() {
-    const observerOptions = {
-      threshold: 0.1
-    };
+    // Add theme state
+    this.currentTheme = 'light';
 
-    // Observer for dark theme
-    this.themeObservers.dark = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          gsap.to(this.options, {
-            bgPower: 0,
-            duration: 0.6,
-            ease: "power2.out"
-          });
-        }
-      });
-    }, observerOptions);
-
-    // Observer for light theme
-    this.themeObservers.light = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          gsap.to(this.options, {
-            bgPower: 2,
-            duration: 0.6,
-            ease: "power2.out"
-          });
-        }
-      });
-    }, observerOptions);
-
-    // Start observing theme elements
-    document.querySelectorAll('[data-animate-theme-to="dark"]').forEach(el => 
-      this.themeObservers.dark.observe(el)
-    );
-    document.querySelectorAll('[data-animate-theme-to="light"]').forEach(el => 
-      this.themeObservers.light.observe(el)
-    );
+    // Initialize theme management
+    this.initThemeManagement();
   }
 
   init() {
@@ -198,15 +161,15 @@ class GradientBackground {
       'varying vec2 v_uv;' +
 
       'void main() {' +
-      '    float ns = smoothstep(0., 1., simplex3d(vec3(v_uv * 1. + u_time * 2.0, u_time * 1.0)));' +
+      '    float ns = smoothstep(0., 1., simplex3d(vec3(v_uv * 0.5 + u_time, u_time * 1.2)));' +
       '    float dist = distance(v_uv, vec2(0., .7));' +
-      '    dist = smoothstep(0.1, 1., dist);' +
+      '    dist = smoothstep(0.01, 0.9, dist);' +
       '    float grad = ns * dist;' +
 
-      '    vec3 col1 = mix(u_color_dark1 * 1.2, u_color_dark2, grad);' +
-      '    vec3 col2 = mix(u_color_light1, u_color_light2, grad);' +
-      '    vec3 color = mix(col2 * u_BG_POWER, col1, 0.5);' +
-
+      '    vec3 dark = mix(u_color_dark1, u_color_dark2, grad);' +
+      '    vec3 light = mix(u_color_light1, u_color_light2, grad);' +
+      '    vec3 color = mix(dark, light, smoothstep(0.4, 0.6, u_BG_POWER));' +
+      // Smoothstep for gradual transition
       '    gl_FragColor = vec4(color, 1.0);' +
       '}';
 
@@ -254,6 +217,22 @@ class GradientBackground {
     this.gl.enable(this.gl.BLEND);
     this.gl.blendFunc(this.gl.SRC_ALPHA, this.gl.ONE_MINUS_SRC_ALPHA);
   }
+  /*async init() {
+    try {
+      // Fetch shader files
+      const vertexResponse = await fetch('/src/gl/screen/vertex.vert');
+      const fragmentResponse = await fetch('/src/gl/screen/fragment.frag');
+      
+      const vertexShaderSource = await vertexResponse.text();
+      const fragmentShaderSource = await fragmentResponse.text();
+  
+      // Create shader program
+      this.program = this.createShaderProgram(vertexShaderSource, fragmentShaderSource);
+      // ...rest of init code
+    } catch (error) {
+      console.error('Failed to load shaders:', error);
+    }
+  }*/
 
   createBuffer(data) {
     const buffer = this.gl.createBuffer();
@@ -311,61 +290,7 @@ class GradientBackground {
     return program;
   }
 
-  calculateAnimationSpeed(value) {
-    // Ensure value is between 0 and 10
-    const clampedValue = Math.max(0, Math.min(10, value));
-
-    if (clampedValue === 0) return 0;
-
-    // Much faster scaling
-    if (clampedValue <= 3) {
-      // Slow (0-3)
-      return 0.02 * clampedValue;
-    } else if (clampedValue <= 7) {
-      // Normal range (3-7)
-      return 0.06 * clampedValue;
-    } else {
-      // Fast range (7-10)
-      return 0.1 * clampedValue;
-    }
-  }
-
-  render() {
-    if (!this.gl || !this.program) return;
-
-    // Clear and set program
-    this.gl.clearColor(0, 0, 0, 0);
-    this.gl.clear(this.gl.COLOR_BUFFER_BIT);
-    this.gl.useProgram(this.program);
-
-    // Set attributes
-    if (this.positionBuffer && this.uvBuffer) {
-      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.positionBuffer);
-      this.gl.enableVertexAttribArray(this.positionLocation);
-      this.gl.vertexAttribPointer(this.positionLocation, 2, this.gl.FLOAT, false, 0, 0);
-
-      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.uvBuffer);
-      this.gl.enableVertexAttribArray(this.uvLocation);
-      this.gl.vertexAttribPointer(this.uvLocation, 2, this.gl.FLOAT, false, 0, 0);
-    }
-
-    // Calculate time with speed control
-    const computedSpeed = this.calculateAnimationSpeed(this.options.animationSpeed);
-    const time = this.options.animationSpeed === 0 ?
-      0 : (Date.now() - this.startTime) * 0.001 * computedSpeed;
-
-    // Update uniforms
-    this.gl.uniform1f(this.timeLocation, time);
-    this.gl.uniform3fv(this.colorDark1Location, this.options.colors.dark1);
-    this.gl.uniform3fv(this.colorDark2Location, this.options.colors.dark2);
-    this.gl.uniform3fv(this.colorLight1Location, this.options.colors.light1);
-    this.gl.uniform3fv(this.colorLight2Location, this.options.colors.light2);
-    this.gl.uniform1f(this.bgPowerLocation, this.options.bgPower);
-
-    // Draw
-    this.gl.drawArrays(this.gl.TRIANGLE_STRIP, 0, 4);
-  }
-
+  // Update the setupGUI method
   setupGUI() {
     if (!window.dat) {
       console.warn('dat.gui not found, skipping GUI setup');
@@ -373,33 +298,59 @@ class GradientBackground {
     }
 
     try {
-      this.gui = new dat.GUI({
-        autoPlace: false,
-        width: 300
-      });
-
-      // Create and style GUI container
-      const guiContainer = document.createElement('div');
-      guiContainer.style.position = 'fixed';
-      guiContainer.style.top = '20px';
-      guiContainer.style.right = '20px';
-      guiContainer.style.zIndex = '10000';
-      document.body.appendChild(guiContainer);
-      guiContainer.appendChild(this.gui.domElement);
-
-      // Hide GUI initially
+      this.gui = new dat.GUI({ autoPlace: false });
       this.gui.domElement.style.display = 'none';
 
+      // Style the GUI container
+      this.gui.domElement.style.position = 'fixed';
+      this.gui.domElement.style.top = '10px';
+      this.gui.domElement.style.right = '10px';
+      this.gui.domElement.style.zIndex = '9999'; // Ensure it's above other elements
+
+      // Append to body instead of container for fixed positioning
+      document.body.appendChild(this.gui.domElement);
+
+      // Convert current vec3 colors to hex strings
+      const vec3ToHex = (vec3) => {
+        const r = Math.round(vec3[0] * 255);
+        const g = Math.round(vec3[1] * 255);
+        const b = Math.round(vec3[2] * 255);
+        return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+      };
+
+      const colorConfig = {
+        dark1: vec3ToHex(this.options.colors.dark1),
+        dark2: vec3ToHex(this.options.colors.dark2),
+        light1: vec3ToHex(this.options.colors.light1),
+        light2: vec3ToHex(this.options.colors.light2)
+      };
+
       const colors = this.gui.addFolder('Colors');
-      colors.addColor(this.options.colors, 'dark1').name('Dark 1');
-      colors.addColor(this.options.colors, 'dark2').name('Dark 2');
-      colors.addColor(this.options.colors, 'light1').name('Light 1');
-      colors.addColor(this.options.colors, 'light2').name('Light 2');
+
+      // Update color when hex changes
+      const updateColor = (colorName, hexValue) => {
+        const r = parseInt(hexValue.slice(1, 3), 16) / 255;
+        const g = parseInt(hexValue.slice(3, 5), 16) / 255;
+        const b = parseInt(hexValue.slice(5, 7), 16) / 255;
+        this.options.colors[colorName] = [r, g, b];
+      };
+
+      colors.addColor(colorConfig, 'dark1')
+        .name('Dark 1')
+        .onChange(v => updateColor('dark1', v));
+      colors.addColor(colorConfig, 'dark2')
+        .name('Dark 2')
+        .onChange(v => updateColor('dark2', v));
+      colors.addColor(colorConfig, 'light1')
+        .name('Light 1')
+        .onChange(v => updateColor('light1', v));
+      colors.addColor(colorConfig, 'light2')
+        .name('Light 2')
+        .onChange(v => updateColor('light2', v));
 
       const controls = this.gui.addFolder('Controls');
-      controls.add(this.options, 'bgPower', 0, 2.0, 0.1).name('Brightness');
-      controls.add(this.options, 'animationSpeed', 0, 10, 0.1).name('Speed');
-      controls.add(this.options, 'darkMix', 0, 1, 0.1).name('Dark Mix');
+      controls.add(this.options, 'bgPower', 0.1, 2.0)
+        .name('Brightness');
 
       colors.open();
       controls.open();
@@ -425,11 +376,63 @@ class GradientBackground {
     this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
   }
 
+  toFloat32Array(arr) {
+    if (arr instanceof Float32Array) return arr;
+    return new Float32Array(Array.isArray(arr) ? arr : Object.values(arr));
+  }
+
+  render() {
+    if (!this.gl || !this.program) return;
+
+    // Clear and set program
+    this.gl.clearColor(0, 0, 0, 0);
+    this.gl.clear(this.gl.COLOR_BUFFER_BIT);
+    this.gl.useProgram(this.program);
+
+    // Set attributes
+    if (this.positionBuffer && this.uvBuffer) {
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.positionBuffer);
+      this.gl.enableVertexAttribArray(this.positionLocation);
+      this.gl.vertexAttribPointer(this.positionLocation, 2, this.gl.FLOAT, false, 0, 0);
+
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.uvBuffer);
+      this.gl.enableVertexAttribArray(this.uvLocation);
+      this.gl.vertexAttribPointer(this.uvLocation, 2, this.gl.FLOAT, false, 0, 0);
+    }
+
+    // Update uniforms
+    const time = (Date.now() - this.startTime) * 0.0001;
+    this.gl.uniform1f(this.timeLocation, time);
+
+    // Ensure we're passing exactly 3 components for vec3 uniforms
+    const dark1 = new Float32Array([
+      this.options.colors.dark1[0],
+      this.options.colors.dark1[1],
+      this.options.colors.dark1[2]
+    ]);
+
+    const dark2 = new Float32Array([
+      this.options.colors.dark2[0],
+      this.options.colors.dark2[1],
+      this.options.colors.dark2[2]
+    ]);
+
+    this.gl.uniform3fv(this.colorDark1Location, dark1);
+    this.gl.uniform3fv(this.colorDark2Location, dark2);
+    this.gl.uniform3fv(this.colorLight1Location, this.toFloat32Array(this.options.colors.light1));
+    this.gl.uniform3fv(this.colorLight2Location, this.toFloat32Array(this.options.colors.light2));
+    this.gl.uniform1f(this.bgPowerLocation, this.options.bgPower);
+
+    // Draw
+    this.gl.drawArrays(this.gl.TRIANGLE_STRIP, 0, 4);
+  }
+
   animate() {
     this.render();
     this.animationFrame = requestAnimationFrame(() => this.animate());
   }
 
+  // Update the destroy method to handle the new GUI placement
   destroy() {
     if (this.animationFrame) {
       cancelAnimationFrame(this.animationFrame);
@@ -437,13 +440,9 @@ class GradientBackground {
 
     if (this.gui) {
       this.gui.destroy();
-    }
-
-    // Clean up observers
-    if (this.themeObservers) {
-      Object.values(this.themeObservers).forEach(observer => {
-        if (observer) observer.disconnect();
-      });
+      if (this.gui.domElement && this.gui.domElement.parentNode) {
+        this.gui.domElement.parentNode.removeChild(this.gui.domElement);
+      }
     }
 
     window.removeEventListener('resize', this.resize);
@@ -458,7 +457,146 @@ class GradientBackground {
     if (this.canvas && this.canvas.parentNode) {
       this.canvas.parentNode.removeChild(this.canvas);
     }
+
+    window.removeEventListener('resize', () => this.handleThemeChange(this
+      .checkVisibleThemeElements()));
+    ScrollTrigger.getAll().forEach(trigger => trigger.kill());
   }
+
+  setTheme(theme, duration = 2.0) {
+    //console.log(`🎨 Setting theme to ${theme} with duration ${duration}`);
+    //console.log('Current bgPower:', this.options.bgPower);
+
+    gsap.to(this.options, {
+      bgPower: theme === 'dark' ? 0.2 : 0.8,
+      duration,
+      ease: 'power2.inOut',
+      onUpdate: () => {
+        //console.log('Theme transition - bgPower:', this.options.bgPower);
+        this.render();
+      },
+      onComplete: () => {
+        //console.log(`✅ Theme transition complete: ${theme}`);
+        //console.log('Final bgPower:', this.options.bgPower);
+      }
+    });
+  }
+
+  initThemeManagement() {
+    //console.log('🚀 Theme Management Initialization');
+    //console.log('Current theme state:', this.currentTheme);
+
+    const darkElements = gsap.utils.toArray('[data-animate-theme-to="dark"]');
+    //console.log('🔍 Dark elements found:', darkElements.length);
+
+    if (darkElements.length > 0) {
+      //console.log('📍 Setting up ScrollTriggers for dark elements');
+      darkElements.forEach((element, index) => {
+        ScrollTrigger.create({
+          trigger: element,
+          start: 'top center', // Changed from bottom to center
+          end: 'bottom center', // Changed trigger points
+          onEnter: () => {
+            //console.log(`🎯 Dark element ${index} entered - Setting DARK theme`);
+            this.handleThemeChange('dark');
+          },
+          onEnterBack: () => {
+            //console.log(`↩️ Dark element ${index} entered back - Setting DARK theme`);
+            this.handleThemeChange('dark');
+          },
+          onLeave: () => {
+            //console.log(`⬆️ Dark element ${index} left - Setting LIGHT theme`);
+            this.handleThemeChange('light');
+          },
+          onLeaveBack: () => {
+            //console.log(`⬇️ Dark element ${index} left back - Setting LIGHT theme`);
+            this.handleThemeChange('light');
+          },
+          markers: false
+        });
+      });
+    } else {
+      //console.log('⚪ No dark elements - Setting light mode by default');
+      this.handleThemeChange('light');
+    }
+
+    // Initial theme check
+    const initialTheme = this.checkVisibleThemeElements();
+    //console.log('Initial theme check:', initialTheme);
+    this.handleThemeChange(initialTheme);
+  }
+
+  checkVisibleThemeElements() {
+    //console.log('🔍 Checking visible elements');
+    const darkElements = gsap.utils.toArray('[data-animate-theme-to="dark"]');
+
+    if (darkElements.length === 0) {
+      //console.log('⚪ No dark elements - defaulting to light mode');
+      return 'light';
+    }
+
+    // Check if any dark element is in the center of the viewport
+    const viewportCenter = window.innerHeight / 2;
+
+    const visibleDark = darkElements.some(el => {
+      const rect = el.getBoundingClientRect();
+      const elementCenter = rect.top + (rect.height / 2);
+      const isVisible = elementCenter > 0 && elementCenter < window.innerHeight;
+
+      console.log('Element visibility check:', {
+        elementId: el.id || 'no-id',
+        elementCenter,
+        viewportCenter,
+        isVisible,
+        position: {
+          top: rect.top,
+          bottom: rect.bottom,
+          height: rect.height
+        }
+      });
+
+      return isVisible;
+    });
+
+    const theme = visibleDark ? 'dark' : 'light';
+    //console.log(`Theme detection result: ${theme} (visibleDark: ${visibleDark})`);
+    return theme;
+  }
+
+  initializeTheme() {
+    //console.log('🎬 Initializing theme');
+    ScrollTrigger.refresh();
+    const initialTheme = this.checkVisibleThemeElements();
+    //console.log('Initial theme detection:', initialTheme);
+
+    this.handleThemeChange(initialTheme);
+
+    //console.log('Fading in container');
+    gsap.to(this.container, {
+      opacity: 1,
+      duration: 1,
+      ease: 'power2.inOut',
+      onComplete: () => console.log('✨ Container fade-in complete')
+    });
+  }
+
+  handleThemeChange(theme) {
+    //console.log('🔄 Theme change handler');
+    console.log('States:', {
+      currentTheme: this.currentTheme,
+      requestedTheme: theme,
+      bgPower: this.options.bgPower
+    });
+
+    if (theme !== this.currentTheme) {
+      console.log(`⚡ Changing theme from ${this.currentTheme} to ${theme}`);
+      this.currentTheme = theme;
+      this.setTheme(theme, 1.5);
+    } else {
+      console.log('↩️ Theme unchanged:', theme);
+    }
+  }
+
 }
 
 // Export for both module and global usage
@@ -467,16 +605,33 @@ if (typeof module !== 'undefined' && module.exports) {
 } else {
   window.GradientBackground = GradientBackground;
 }
+console.log('Script updated: 2024-04-14 15:30:00');
 
-const gradient = new GradientBackground('#bg-gradient', {
-  colors: {
-    dark1: [0x0d / 255, 0x15 / 255, 0x1b / 255], // #0d151b
-    dark2: [0x71 / 255, 0xa3 / 255, 0xb0 / 255], // #71a3b0
-    light1: [0xf7 / 255, 0xfa / 255, 0xfc / 255], // #f7fafc
-    light2: [0xc4 / 255, 0xdc / 255, 0xe5 / 255] // #c4dce5
-  },
-  bgPower: 0,
-  animationSpeed: 2,
-  darkMix: 0.4
-});
-console.log("🌈 gradient chargé")
+const bgGradientContainer = document.querySelector('#bg-gradient');
+if (bgGradientContainer) {
+  bgGradientContainer.style.opacity = '0'; // Start hidden
+
+  const gradient = new GradientBackground('#bg-gradient', {
+    colors: {
+      dark1: hexToVec3(0x101921),
+      dark2: hexToVec3(0x71a3b0),
+      light1: hexToVec3(0xf7fafc),
+      light2: hexToVec3(0xc4dce5)
+    },
+    bgPower: 0.2
+  });
+
+  // Fade in after initialization
+  requestAnimationFrame(() => {
+    console.log('🎭 Fading in gradient background');
+    gradient.setTheme(gradient.checkVisibleThemeElements());
+    gsap.to(bgGradientContainer, {
+      opacity: 1,
+      duration: 1.5,
+      ease: 'power2.inOut',
+      onComplete: () => {
+        console.log('✨ Gradient fade-in complete');
+      }
+    });
+  });
+}

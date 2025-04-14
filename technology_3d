@@ -1,0 +1,253 @@
+console.log("🚀 WebGL - GLTF loaded and centered Latest");
+
+// Define an array of timestamps (for example, index 2 equals 70)
+const object_timestamps = [0, 210, 260];
+
+const modelURL =
+  'https://cdn.jsdelivr.net/gh/DaphneHB/zenopower@main/rsg_home_bake/rsg_home_animated/rsg_home_animated.glb';
+const textureColorURL =
+  'https://cdn.jsdelivr.net/gh/DaphneHB/zenopower@main/rsg_home_bake/rsg_home_animated/tex/metal_baseColorTexture.jpg';
+const textureRoughnessURL =
+  'https://cdn.jsdelivr.net/gh/DaphneHB/zenopower@main/rsg_home_bake/rsg_home_animated/tex/metal_metallicRoughnessTexture.png';
+const textureMetalnessURL =
+  'https://cdn.jsdelivr.net/gh/DaphneHB/zenopower@main/rsg_textures/rsg_home_AOV_rsg_home_Metalness.jpg';
+
+let scene, camera, renderer, controls;
+let model; // declared globally
+let hover = false;
+let mixer, action, clock;
+let targetTime = 0;
+let isAnimating = false;
+
+const container = document.getElementById('tech-rsg-container');
+
+// Init, load model, and start animation loop
+init();
+loadModel();
+animate();
+
+function init() {
+  scene = new THREE.Scene();
+
+  // Camera
+  camera = new THREE.PerspectiveCamera(
+    45,
+    container.clientWidth / container.clientHeight,
+    0.1,
+    1000
+  );
+  camera.position.set(0, 0, 5);
+
+  // Renderer
+  renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+  renderer.setSize(container.clientWidth, container.clientHeight);
+  renderer.setPixelRatio(window.devicePixelRatio);
+  container.appendChild(renderer.domElement);
+
+  // Lights
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.5));
+  const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
+  directionalLight.position.set(5, 10, 7);
+  scene.add(directionalLight);
+}
+
+function loadModel() {
+  const loader = new THREE.GLTFLoader();
+  const textureLoader = new THREE.TextureLoader();
+  const metalTexture = textureLoader.load(textureColorURL);
+  const roughnessMap = textureLoader.load(textureRoughnessURL);
+  // const metalnessMap = textureLoader.load(textureMetalnessURL);
+
+  loader.load(
+    modelURL,
+    (gltf) => {
+      model = gltf.scene;
+      model.rotation.set(0, 0, 0);
+      scene.add(model);
+console.log("model");
+console.log(model);
+
+      // Log all objects in the scene
+      console.log('Scene Objects:');
+      model.traverse((object) => {
+        console.log('Object:', {
+          name: object.name,
+          type: object.type,
+          visible: object.visible,
+          position: object.position,
+          rotation: object.rotation,
+          id: object.id
+        });
+      });
+
+      // Setup animation mixer and play first animation clip
+      mixer = new THREE.AnimationMixer(gltf.scene);
+      action = mixer.clipAction(gltf.animations[0]);
+      console.log("action");
+      console.log(action);
+      console.log("action clip");
+      console.log(action.getClip());   
+      console.log("action clip name");
+      console.log(action.getClip().name); // Log the name of the animation clip
+      console.log("action clip duration");
+      console.log(action.getClip().duration); // Log the name of the animation clip
+      console.log("mixer");
+      console.log(mixer);
+        console.log("mixer time");
+        console.log(mixer.time); // Log the current time of the mixer
+      // Log animation details
+      console.log('Animation Details:', {
+        duration: action.getClip().duration,
+        timeScale: action.timeScale,
+        weight: action.weight,
+        repetitions: action.repetitions,
+        time: action.time
+      });
+
+      // Initialize animation
+      action.setLoop(THREE.LoopOnce);
+      action.clampWhenFinished = true;
+      action.play();
+      action.paused = true; // Animation paused by default
+
+      clock = new THREE.Clock();
+      model.rotation.set(0, 0, Math.PI * -0.1); // Rotate slightly on Z
+
+      // Centering the model
+      const box = new THREE.Box3().setFromObject(model);
+      const center = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3()).length();
+      model.position.x += (model.position.x - center.x);
+      model.position.y += (model.position.y - center.y);
+      model.position.z += (model.position.z - center.z);
+      camera.position.set(0, 0, size * 1.5);
+      camera.lookAt(center);
+
+      // Log timeline duration of the active animation clip
+      console.log("Animation timeline duration: ");
+      console.log(action)
+
+      // Log available animations: list each animation's name and duration
+      gltf.animations.forEach((clip, index) => {
+        console.log("Animation " + index + ": " + clip.name + " (" + clip.duration +
+          " seconds)");
+      });
+
+      // Apply textures and material settings
+      model.traverse((child) => {
+        if (child.isMesh && child.material) {
+          child.material.map = metalTexture; // Base color
+          child.material.roughnessMap = roughnessMap; // Smoothness
+          //child.material.metalnessMap = metalnessMap; // Metallic areas
+
+          child.material.roughness = 1;
+          child.material.metalness = 1;
+
+          child.material.needsUpdate = true;
+        }
+      });
+
+      console.log("✅ Modèle centré et prêt");
+    },
+    undefined,
+    (error) => {
+      console.error("❌ Erreur chargement modèle:", error);
+    }
+  );
+}
+
+// Function that smoothly animates to a given timestamp
+function animateToTimestamp(timestamp) {
+  if (!mixer || !action) {
+    console.warn('Mixer or action not initialized');
+    return;
+  }
+  
+  // Reset the mixer time if needed
+  if (mixer.time === undefined) {
+    mixer.time = 0;
+  }
+  
+  targetTime = timestamp;
+  isAnimating = true;
+  
+  // Get current time and calculate proper direction
+  const currentTime = mixer.time;
+  
+  // Set proper time scale for smooth animation
+  action.timeScale = currentTime > targetTime ? -1 : 1;
+  
+  // Make sure the action is properly configured
+  action.setLoop(THREE.LoopOnce);
+  action.clampWhenFinished = true;
+  action.enabled = true;
+  action.paused = false;
+  
+  // Reset the action if it was finished
+  if (!action.isRunning()) {
+    action.reset();
+  }
+  
+  action.play();
+  
+  console.log('Animation Status:', {
+    currentTime: currentTime,
+    targetTime: targetTime,
+    timeScale: action.timeScale,
+    isRunning: action.isRunning(),
+    weight: action.weight
+  });
+}
+
+// Handle accordion clicks and animate to corresponding timestamps
+const accordionElements = {
+  'rsg-exterior': object_timestamps[0],
+  'rsg-interior': object_timestamps[1],
+  'rsg-heat': object_timestamps[2]
+};
+
+// Add click handlers for each accordion
+Object.entries(accordionElements).forEach(([id, timestamp]) => {
+  const element = document.querySelector(`[accordion="${id}"]`);
+  if (element) {
+    element.onclick = () => {
+      console.log(`${id} clicked, animating to timestamp:`, timestamp);
+      if (mixer && action) {
+        animateToTimestamp(timestamp);
+      }
+    };
+  }
+});
+
+// Three.js animation loop
+function animate() {
+  requestAnimationFrame(animate);
+
+  if (mixer && isAnimating) {
+    const delta = clock.getDelta();
+    mixer.update(delta);
+    
+    console.log('Animation Progress:', {
+      currentTime: mixer.time,
+      targetTime: targetTime,
+      delta: delta
+    });
+
+    // Check if we've reached the target time
+    if ((action.timeScale > 0 && mixer.time >= targetTime) ||
+        (action.timeScale < 0 && mixer.time <= targetTime)) {
+      
+      // Ensure we stop exactly at the target time
+      mixer.setTime(targetTime);
+      isAnimating = false;
+      
+      console.log('Animation Complete:', {
+        finalTime: mixer.time,
+        targetReached: targetTime,
+        difference: Math.abs(mixer.time - targetTime)
+      });
+    }
+  }
+
+  renderer.render(scene, camera);
+}
