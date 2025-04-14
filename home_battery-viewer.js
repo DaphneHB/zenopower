@@ -1,3 +1,65 @@
+console.log('Script updated: 2024-04-15 00:30:00');
+
+const modelConfigs = [
+{
+  containerId: 'home-glb-container',
+  modelURL: 'https://cdn.jsdelivr.net/gh/DaphneHB/zenopower@main/home-rsg05/rsg_home_05.gltf',
+  textureColorURL: 'https://cdn.jsdelivr.net/gh/DaphneHB/zenopower@main/home-rsg05/tex/rsg_home_model_4_rsg_home_Color.png',
+  textureRoughnessURL: 'https://cdn.jsdelivr.net/gh/DaphneHB/zenopower@main/home-rsg05/tex/rsg_home_model_4_rsg_home_Roughness.png',
+  textureMetalnessURL: 'https://cdn.jsdelivr.net/gh/DaphneHB/zenopower@main/home-rsg05/tex/rsg_home_model_4_rsg_home_Metallic.png',
+  guiShortcut: {
+    key: 'b',
+    requireShift: true
+  },
+  modelScale: 4,
+  tiltAmount: 0.3,
+  baseRotation: {
+    x: 0.1, // Updated X rotation
+    y: 0.6,
+    z: -0.45
+  },
+  lights: { // Different light settings for first model
+    ambient: {
+      color: 0xffffff,
+      intensity: 0.15
+    },
+    directional: {
+      color: 0xffffff,
+      intensity: 1.4,
+      position: { x: 2.5, y: 2, z: 1.5 } // Slightly higher position
+    }
+  }
+},
+{
+  containerId: 'home-glb-container2',
+  modelURL: 'https://cdn.jsdelivr.net/gh/DaphneHB/zenopower@main/rsg_home_bake/rsg_home/rsg_home.glb',
+  textureColorURL: 'https://cdn.jsdelivr.net/gh/DaphneHB/zenopower@main/rsg_home_bake/rsg_home/tex/metal_baseColorTexture.jpg',
+  textureRoughnessURL: 'https://cdn.jsdelivr.net/gh/DaphneHB/zenopower@main/rsg_home_bake/rsg_home/tex/metal_metallicRoughnessTexture.png',
+  textureMetalnessURL: 'https://cdn.jsdelivr.net/gh/DaphneHB/zenopower@main/rsg_home_bake/rsg_home/tex/metal_metallicRoughnessTexture.png',
+  guiShortcut: {
+    key: 'p',
+    requireShift: true
+  },
+  modelScale: 4,
+  tiltAmount: 0.3,
+  baseRotation: {
+    x: 0.1, // Updated X rotation
+    y: 0.6,
+    z: -0.45
+  },
+  lights: { // Different light settings for second model
+    ambient: {
+      color: 0xffffff,
+      intensity: 0.15 // Slightly brighter ambient
+    },
+    directional: {
+      color: 0xffffff,
+      intensity: 1.2, // Less intense directional light
+      position: { x: 2.5, y: 2, z: 1.5 } // Different position
+    }
+  }
+}];
+
 // Add global GUI management at the top of the file
 const activeGUIs = new Set();
 
@@ -645,67 +707,21 @@ class ModelViewer {
     }
   }
 }
-console.log('Script updated: 2024-04-14 17:30:00');
-
-const modelConfigs = [
-{
-  containerId: 'home-glb-container',
-  modelURL: 'https://cdn.jsdelivr.net/gh/DaphneHB/zenopower@main/home-rsg05/rsg_home_05.gltf',
-  textureColorURL: 'https://cdn.jsdelivr.net/gh/DaphneHB/zenopower@main/home-rsg05/tex/rsg_home_model_4_rsg_home_Color.png',
-  textureRoughnessURL: 'https://cdn.jsdelivr.net/gh/DaphneHB/zenopower@main/home-rsg05/tex/rsg_home_model_4_rsg_home_Roughness.png',
-  textureMetalnessURL: 'https://cdn.jsdelivr.net/gh/DaphneHB/zenopower@main/home-rsg05/tex/rsg_home_model_4_rsg_home_Metallic.png',
-  guiShortcut: {
-    key: 'b',
-    requireShift: true
-  },
-  modelScale: 4,
-  tiltAmount: 0.3,
-  baseRotation: {
-    x: 0.1, // Updated X rotation
-    y: 0.6,
-    z: -0.45
-  },
-  lights: { // Different light settings for first model
-    ambient: {
-      color: 0xffffff,
-      intensity: 0.15
-    },
-    directional: {
-      color: 0xffffff,
-      intensity: 1.4,
-      position: { x: 2.5, y: 2, z: 1.5 } // Slightly higher position
-    }
-  }
-},
-{
-  containerId: 'home-glb-container2',
-  modelURL: 'https://cdn.jsdelivr.net/gh/DaphneHB/zenopower@main/rsg_home_bake/rsg_home/rsg_home.glb',
-  textureColorURL: 'https://cdn.jsdelivr.net/gh/DaphneHB/zenopower@main/rsg_home_bake/rsg_home/tex/metal_baseColorTexture.jpg',
-  textureRoughnessURL: 'https://cdn.jsdelivr.net/gh/DaphneHB/zenopower@main/rsg_home_bake/rsg_home/tex/metal_metallicRoughnessTexture.png',
-  textureMetalnessURL: 'https://cdn.jsdelivr.net/gh/DaphneHB/zenopower@main/rsg_home_bake/rsg_home/tex/metal_metallicRoughnessTexture.png',
-  guiShortcut: {
-    key: 'p',
-    requireShift: true
-  },
-  modelScale: 4,
-  tiltAmount: 0.3,
-  baseRotation: {
-    x: 0.1, // Updated X rotation
-    y: 0.6,
-    z: -0.45
-  },
-  lights: { // Different light settings for second model
-    ambient: {
-      color: 0xffffff,
-      intensity: 0.15 // Slightly brighter ambient
-    },
-    directional: {
-      color: 0xffffff,
-      intensity: 1.2, // Less intense directional light
-      position: { x: 2.5, y: 2, z: 1.5 } // Different position
-    }
-  }
-}];
 
 // Initialize viewers
-const viewers = modelConfigs.map(config => new ModelViewer(config));
+//const viewers = modelConfigs.map(config => new ModelViewer(config));
+// Initialize viewers with detailed logging
+const viewers = modelConfigs
+  .filter(config => {
+    const exists = document.getElementById(config.containerId);
+    if (!exists) {
+      console.warn(`Container #${config.containerId} not found in page - skipping viewer initialization`);
+    }
+    return exists;
+  })
+  .map(config => {
+    console.log(`Initializing viewer for #${config.containerId}`);
+    return new ModelViewer(config);
+  });
+
+console.log(`Initialized ${viewers.length} of ${modelConfigs.length} configured viewers`);
