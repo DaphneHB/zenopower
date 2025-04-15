@@ -1,24 +1,11 @@
-console.log('Script updated: 2024-04-15 00:30:00');
-
-const modelConfigs = [
-{
-  containerId: 'home-glb-container',
-  modelURL: 'https://cdn.jsdelivr.net/gh/DaphneHB/zenopower@main/home-rsg05/rsg_home_05.gltf',
-  textureColorURL: 'https://cdn.jsdelivr.net/gh/DaphneHB/zenopower@main/home-rsg05/tex/rsg_home_model_4_rsg_home_Color.png',
-  textureRoughnessURL: 'https://cdn.jsdelivr.net/gh/DaphneHB/zenopower@main/home-rsg05/tex/rsg_home_model_4_rsg_home_Roughness.png',
-  textureMetalnessURL: 'https://cdn.jsdelivr.net/gh/DaphneHB/zenopower@main/home-rsg05/tex/rsg_home_model_4_rsg_home_Metallic.png',
-  guiShortcut: {
-    key: 'b',
-    requireShift: true
-  },
+// Constants
+const MODEL_CONFIG = {
+  // Use a different CDN or direct GitHub raw URL
+  modelURL: 'https://raw.githubusercontent.com/DaphneHB/zenopower/main/3dmodels_latests/rsg/rsg_animation_05.glb',
+  texturePath: 'https://cdn.jsdelivr.net/gh/DaphneHB/zenopower@main/3dmodels_latests/rsg/tex/',
+  containerId: 'tech-rsg-container',
   modelScale: 4,
-  tiltAmount: 0.3,
-  baseRotation: {
-    x: 0.1, // Updated X rotation
-    y: 0.6,
-    z: -0.45
-  },
-  lights: { // Different light settings for first model
+  lights: {
     ambient: {
       color: 0xffffff,
       intensity: 0.15
@@ -26,39 +13,16 @@ const modelConfigs = [
     directional: {
       color: 0xffffff,
       intensity: 1.4,
-      position: { x: 2.5, y: 2, z: 1.5 } // Slightly higher position
+      position: { x: 2.5, y: 2, z: 1.5 }
     }
-  }
-},
-{
-  containerId: 'home-glb-container2',
-  modelURL: 'https://cdn.jsdelivr.net/gh/DaphneHB/zenopower@main/rsg_home_bake/rsg_home/rsg_home.glb',
-  textureColorURL: 'https://cdn.jsdelivr.net/gh/DaphneHB/zenopower@main/rsg_home_bake/rsg_home/tex/metal_baseColorTexture.jpg',
-  textureRoughnessURL: 'https://cdn.jsdelivr.net/gh/DaphneHB/zenopower@main/rsg_home_bake/rsg_home/tex/metal_metallicRoughnessTexture.png',
-  textureMetalnessURL: 'https://cdn.jsdelivr.net/gh/DaphneHB/zenopower@main/rsg_home_bake/rsg_home/tex/metal_metallicRoughnessTexture.png',
-  guiShortcut: {
-    key: 'p',
-    requireShift: true
   },
-  modelScale: 4,
-  tiltAmount: 0.3,
-  baseRotation: {
-    x: 0.1, // Updated X rotation
-    y: 0.6,
-    z: -0.45
-  },
-  lights: { // Different light settings for second model
-    ambient: {
-      color: 0xffffff,
-      intensity: 0.15 // Slightly brighter ambient
-    },
-    directional: {
-      color: 0xffffff,
-      intensity: 1.2, // Less intense directional light
-      position: { x: 2.5, y: 2, z: 1.5 } // Different position
-    }
+  cameraSettings: {
+    fov: 45,
+    near: 0.1,
+    far: 100,
+    position: { x: 0, y: 0, z: 10 }
   }
-}];
+};
 
 // Add global GUI management at the top of the file
 const activeGUIs = new Set();
@@ -547,8 +511,17 @@ class ModelViewer {
           }
         });
       },
-      undefined,
-      onError
+      (progress) => {
+        console.log('Loading progress:', (progress.loaded / progress.total * 100) + '%');
+      },
+      (error) => {
+        console.error('Error loading model:', error);
+        // Show user-friendly error message
+        const errorDiv = document.createElement('div');
+        errorDiv.style.color = 'red';
+        errorDiv.textContent = 'Failed to load 3D model. Please try again later.';
+        this.container.appendChild(errorDiv);
+      }
     );
   }
 
@@ -708,20 +681,104 @@ class ModelViewer {
   }
 }
 
-// Initialize viewers
-// Initialize viewers with detailed logging
-const viewers = modelConfigs
-  .filter(config => {
-    const exists = document.getElementById(config.containerId);
-    if (!exists) {
-      console.warn(
-        `Container #${config.containerId} not found in page - skipping viewer initialization`);
-    }
-    return exists;
-  })
-  .map(config => {
-    console.log(`Initializing viewer for #${config.containerId}`);
-    return new ModelViewer(config);
-  });
+class RSGViewer extends ModelViewer {
+  constructor() {
+    super(MODEL_CONFIG);
+    this.mixer = null;
+    this.clips = null;
+    this.currentAction = null;
+  }
 
-console.log(`Initialized ${viewers.length} of ${modelConfigs.length} configured viewers`);
+  loadModel() {
+    const loader = new THREE.GLTFLoader();
+    loader.load(
+      MODEL_CONFIG.modelURL, 
+      (gltf) => {
+        this.model = gltf.scene;
+        this.clips = gltf.animations;
+        this.mixer = new THREE.AnimationMixer(this.model);
+
+        this.updateModelScale();
+        this.scene.add(this.model);
+
+        // Add animation controls after model is loaded
+        this.addAnimationControls();
+
+        const accordionTrigger = document.querySelector("[accordion='rsg-exterior']");
+        if (accordionTrigger) {
+          accordionTrigger.addEventListener('click', () => this.playAnimation());
+        }
+      },
+      (progress) => {
+        console.log('Loading progress:', (progress.loaded / progress.total * 100) + '%');
+      },
+      (error) => {
+        console.error('Error loading model:', error);
+        // Show user-friendly error message
+        const errorDiv = document.createElement('div');
+        errorDiv.style.color = 'red';
+        errorDiv.textContent = 'Failed to load 3D model. Please try again later.';
+        this.container.appendChild(errorDiv);
+      }
+    );
+  }
+
+  addAnimationControls() {
+    if (!this.gui || !this.clips || !this.clips.length) return;
+
+    const animationFolder = this.gui.addFolder('Animations');
+    
+    // Add animation controls
+    const animationConfig = {
+      play: () => this.playAnimation(),
+      stop: () => {
+        if (this.currentAction) {
+          this.currentAction.stop();
+        }
+      },
+      reset: () => {
+        if (this.currentAction) {
+          this.currentAction.reset();
+        }
+      }
+    };
+
+    animationFolder.add(animationConfig, 'play').name('Play Animation');
+    animationFolder.add(animationConfig, 'stop').name('Stop Animation');
+    animationFolder.add(animationConfig, 'reset').name('Reset Animation');
+    
+    animationFolder.open();
+  }
+
+  playAnimation() {
+    if (this.mixer && this.clips) {
+      if (this.currentAction) {
+        this.currentAction.stop();
+      }
+      this.currentAction = this.mixer.clipAction(this.clips[0]);
+      this.currentAction.reset().play();
+    }
+  }
+
+  animate() {
+    requestAnimationFrame(this.animate);
+    if (this.mixer) {
+      this.mixer.update(0.016);
+    }
+    if (this.renderer && this.scene && this.camera) {
+      this.renderer.render(this.scene, this.camera);
+    }
+  }
+
+  destroy() {
+    super.destroy();
+    if (this.mixer) {
+      this.mixer.stopAllAction();
+    }
+  }
+}
+
+console.log('Script updated: 2024-04-15 00:30:00');
+
+// Create single instance
+const rsgViewer = new RSGViewer();
