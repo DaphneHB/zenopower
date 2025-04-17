@@ -8,7 +8,7 @@ function hexToVec3(hex) {
 // Gradient background with optional sparkles
 class GradientBackground {
   constructor(container, options = {}) {
-    // Default options
+    // Default options with speed parameter
     this.options = {
       useSparkles: false,
       colors: {
@@ -18,8 +18,12 @@ class GradientBackground {
         light2: [0.5, 0.5, 0.9]
       },
       bgPower: 1.2,
+      animationSpeed: 5.0, // Default speed on 0-10 scale
       ...options
     };
+
+    // Add theme state
+    this.currentTheme = 'light';
 
     // Setup canvas and WebGL
     this.canvas = document.createElement('canvas');
@@ -53,10 +57,20 @@ class GradientBackground {
       return;
     }
 
+    // Initialize all components
     this.init();
     this.setupGUI();
     this.resize();
-    this.animate();
+
+    // Initialize theme management after setup
+    this.initThemeManagement();
+
+    // Set initial theme
+    requestAnimationFrame(() => {
+      const initialTheme = this.checkVisibleThemeElements();
+      this.setTheme(initialTheme);
+      this.animate();
+    });
 
     // Event listeners
     window.addEventListener('resize', () => this.resize());
@@ -65,12 +79,6 @@ class GradientBackground {
         this.toggleGUI();
       }
     });
-
-    // Add theme state
-    this.currentTheme = 'light';
-
-    // Initialize theme management
-    this.initThemeManagement();
   }
 
   init() {
@@ -85,93 +93,94 @@ class GradientBackground {
       '}';
 
     // Fragment shader
-    const fragmentShaderSource =
-      'precision highp float;' +
+    const fragmentShaderSource = `
+      precision highp float;
+      
+      uniform float u_time;
+      uniform float u_speed;
+      uniform vec3 u_color_dark1;
+      uniform vec3 u_color_dark2;
+      uniform vec3 u_color_light1;
+      uniform vec3 u_color_light2;
+      uniform float u_BG_POWER;
+      varying vec2 v_uv;
 
       // Simplex noise implementation
-      'vec4 permute(vec4 x) { return mod(((x * 34.0) + 1.0) * x, 289.0); }' +
-      'vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }' +
+      vec4 permute(vec4 x) { return mod(((x * 34.0) + 1.0) * x, 289.0); }
+      vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
 
-      'float simplex3d(vec3 v) {' +
-      '    const vec2 C = vec2(1.0/6.0, 1.0/3.0);' +
-      '    const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);' +
+      float simplex3d(vec3 v) {
+          const vec2 C = vec2(1.0/6.0, 1.0/3.0);
+          const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
 
-      '    vec3 i  = floor(v + dot(v, C.yyy));' +
-      '    vec3 x0 = v - i + dot(i, C.xxx);' +
+          vec3 i  = floor(v + dot(v, C.yyy));
+          vec3 x0 = v - i + dot(i, C.xxx);
 
-      '    vec3 g = step(x0.yzx, x0.xyz);' +
-      '    vec3 l = 1.0 - g;' +
-      '    vec3 i1 = min(g.xyz, l.zxy);' +
-      '    vec3 i2 = max(g.xyz, l.zxy);' +
+          vec3 g = step(x0.yzx, x0.xyz);
+          vec3 l = 1.0 - g;
+          vec3 i1 = min(g.xyz, l.zxy);
+          vec3 i2 = max(g.xyz, l.zxy);
 
-      '    vec3 x1 = x0 - i1 + C.xxx;' +
-      '    vec3 x2 = x0 - i2 + C.yyy;' +
-      '    vec3 x3 = x0 - D.yyy;' +
+          vec3 x1 = x0 - i1 + C.xxx;
+          vec3 x2 = x0 - i2 + C.yyy;
+          vec3 x3 = x0 - D.yyy;
 
-      '    i = mod(i, 289.0);' +
-      '    vec4 p = permute(permute(permute(' +
-      '            i.z + vec4(0.0, i1.z, i2.z, 1.0))' +
-      '            + i.y + vec4(0.0, i1.y, i2.y, 1.0))' +
-      '            + i.x + vec4(0.0, i1.x, i2.x, 1.0));' +
+          i = mod(i, 289.0);
+          vec4 p = permute(permute(permute(
+                  i.z + vec4(0.0, i1.z, i2.z, 1.0))
+                  + i.y + vec4(0.0, i1.y, i2.y, 1.0))
+                  + i.x + vec4(0.0, i1.x, i2.x, 1.0));
 
-      '    float n_ = 1.0/7.0;' +
-      '    vec3 ns = n_ * D.wyz - D.xzx;' +
+          float n_ = 1.0/7.0;
+          vec3 ns = n_ * D.wyz - D.xzx;
 
-      '    vec4 j = p - 49.0 * floor(p * ns.z * ns.z);' +
+          vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
 
-      '    vec4 x_ = floor(j * ns.z);' +
-      '    vec4 y_ = floor(j - 7.0 * x_);' +
+          vec4 x_ = floor(j * ns.z);
+          vec4 y_ = floor(j - 7.0 * x_);
 
-      '    vec4 x = x_ *ns.x + ns.yyyy;' +
-      '    vec4 y = y_ *ns.x + ns.yyyy;' +
-      '    vec4 h = 1.0 - abs(x) - abs(y);' +
+          vec4 x = x_ *ns.x + ns.yyyy;
+          vec4 y = y_ *ns.x + ns.yyyy;
+          vec4 h = 1.0 - abs(x) - abs(y);
 
-      '    vec4 b0 = vec4(x.xy, y.xy);' +
-      '    vec4 b1 = vec4(x.zw, y.zw);' +
+          vec4 b0 = vec4(x.xy, y.xy);
+          vec4 b1 = vec4(x.zw, y.zw);
 
-      '    vec4 s0 = floor(b0)*2.0 + 1.0;' +
-      '    vec4 s1 = floor(b1)*2.0 + 1.0;' +
-      '    vec4 sh = -step(h, vec4(0.0));' +
+          vec4 s0 = floor(b0)*2.0 + 1.0;
+          vec4 s1 = floor(b1)*2.0 + 1.0;
+          vec4 sh = -step(h, vec4(0.0));
 
-      '    vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy;' +
-      '    vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww;' +
+          vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy;
+          vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww;
 
-      '    vec3 p0 = vec3(a0.xy,h.x);' +
-      '    vec3 p1 = vec3(a0.zw,h.y);' +
-      '    vec3 p2 = vec3(a1.xy,h.z);' +
-      '    vec3 p3 = vec3(a1.zw,h.w);' +
+          vec3 p0 = vec3(a0.xy,h.x);
+          vec3 p1 = vec3(a0.zw,h.y);
+          vec3 p2 = vec3(a1.xy,h.z);
+          vec3 p3 = vec3(a1.zw,h.w);
 
-      '    vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2, p2), dot(p3,p3)));' +
-      '    p0 *= norm.x;' +
-      '    p1 *= norm.y;' +
-      '    p2 *= norm.z;' +
-      '    p3 *= norm.w;' +
+          vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2, p2), dot(p3,p3)));
+          p0 *= norm.x;
+          p1 *= norm.y;
+          p2 *= norm.z;
+          p3 *= norm.w;
 
-      '    vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);' +
-      '    m = m * m;' +
-      '    return 42.0 * dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));' +
-      '}' +
+          vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
+          m = m * m;
+          return 42.0 * dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));
+      }
 
-      'uniform float u_time;' +
-      'uniform vec3 u_color_dark1;' +
-      'uniform vec3 u_color_dark2;' +
-      'uniform vec3 u_color_light1;' +
-      'uniform vec3 u_color_light2;' +
-      'uniform float u_BG_POWER;' +
-      'varying vec2 v_uv;' +
+      void main() {
+          float ns = smoothstep(0., 1., simplex3d(vec3(v_uv * 0.5 + u_time * u_speed, u_time * u_speed * 1.2)));
+          float dist = distance(v_uv, vec2(0., .7));
+          dist = smoothstep(0.01, 0.9, dist);
+          float grad = ns * dist;
 
-      'void main() {' +
-      '    float ns = smoothstep(0., 1., simplex3d(vec3(v_uv * 0.5 + u_time, u_time * 1.2)));' +
-      '    float dist = distance(v_uv, vec2(0., .7));' +
-      '    dist = smoothstep(0.01, 0.9, dist);' +
-      '    float grad = ns * dist;' +
-
-      '    vec3 dark = mix(u_color_dark1, u_color_dark2, grad);' +
-      '    vec3 light = mix(u_color_light1, u_color_light2, grad);' +
-      '    vec3 color = mix(dark, light, smoothstep(0.4, 0.6, u_BG_POWER));' +
-      // Smoothstep for gradual transition
-      '    gl_FragColor = vec4(color, 1.0);' +
-      '}';
+          vec3 dark = mix(u_color_dark1, u_color_dark2, grad);
+          vec3 light = mix(u_color_light1, u_color_light2, grad);
+          vec3 color = mix(dark, light, smoothstep(0.4, 0.6, u_BG_POWER));
+          
+          gl_FragColor = vec4(color, 1.0);
+      }`;
 
     // Create shader program
     this.program = this.createShaderProgram(vertexShaderSource, fragmentShaderSource);
@@ -310,24 +319,38 @@ class GradientBackground {
       // Append to body instead of container for fixed positioning
       document.body.appendChild(this.gui.domElement);
 
-      // Convert current vec3 colors to hex strings
-      const vec3ToHex = (vec3) => {
-        const r = Math.round(vec3[0] * 255);
-        const g = Math.round(vec3[1] * 255);
-        const b = Math.round(vec3[2] * 255);
-        return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+      // Speed controls with doubled maximum speed
+      const speedFolder = this.gui.addFolder('Animation');
+      speedFolder.add(this.options, 'animationSpeed', 0, 10)
+        .name('Speed')
+        .onChange(value => {
+          // Convert 0-10 range to appropriate animation speed
+          // At 10 -> 3.0x speed (doubled from previous 1.5x)
+          // At 5 -> 1.5x speed
+          // At 1 -> 0.3x speed
+          // At 0 -> 0.1x speed
+          this.options.animationSpeed = value;
+        });
+      speedFolder.open();
+
+      // Color controls
+      const colorsFolder = this.gui.addFolder('Colors');
+
+      // Helper function to convert RGB array to hex
+      const rgbToHex = (rgb) => {
+        const r = Math.round(rgb[0] * 255);
+        const g = Math.round(rgb[1] * 255);
+        const b = Math.round(rgb[2] * 255);
+        return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
       };
 
       const colorConfig = {
-        dark1: vec3ToHex(this.options.colors.dark1),
-        dark2: vec3ToHex(this.options.colors.dark2),
-        light1: vec3ToHex(this.options.colors.light1),
-        light2: vec3ToHex(this.options.colors.light2)
+        dark1: rgbToHex(this.options.colors.dark1),
+        dark2: rgbToHex(this.options.colors.dark2),
+        light1: rgbToHex(this.options.colors.light1),
+        light2: rgbToHex(this.options.colors.light2)
       };
 
-      const colors = this.gui.addFolder('Colors');
-
-      // Update color when hex changes
       const updateColor = (colorName, hexValue) => {
         const r = parseInt(hexValue.slice(1, 3), 16) / 255;
         const g = parseInt(hexValue.slice(3, 5), 16) / 255;
@@ -335,25 +358,21 @@ class GradientBackground {
         this.options.colors[colorName] = [r, g, b];
       };
 
-      colors.addColor(colorConfig, 'dark1')
-        .name('Dark 1')
-        .onChange(v => updateColor('dark1', v));
-      colors.addColor(colorConfig, 'dark2')
-        .name('Dark 2')
-        .onChange(v => updateColor('dark2', v));
-      colors.addColor(colorConfig, 'light1')
-        .name('Light 1')
-        .onChange(v => updateColor('light1', v));
-      colors.addColor(colorConfig, 'light2')
-        .name('Light 2')
-        .onChange(v => updateColor('light2', v));
+      colorsFolder.addColor(colorConfig, 'dark1').name('Dark 1').onChange(v => updateColor(
+        'dark1', v));
+      colorsFolder.addColor(colorConfig, 'dark2').name('Dark 2').onChange(v => updateColor(
+        'dark2', v));
+      colorsFolder.addColor(colorConfig, 'light1').name('Light 1').onChange(v => updateColor(
+        'light1', v));
+      colorsFolder.addColor(colorConfig, 'light2').name('Light 2').onChange(v => updateColor(
+        'light2', v));
+      colorsFolder.open();
 
+      // Brightness control
       const controls = this.gui.addFolder('Controls');
-      controls.add(this.options, 'bgPower', 0.1, 2.0)
-        .name('Brightness');
-
-      colors.open();
+      controls.add(this.options, 'bgPower', 0.1, 2.0).name('Brightness');
       controls.open();
+
     } catch (error) {
       console.error('Error setting up GUI:', error);
     }
@@ -404,6 +423,11 @@ class GradientBackground {
     const time = (Date.now() - this.startTime) * 0.0001;
     this.gl.uniform1f(this.timeLocation, time);
 
+    // Scale the animation speed: convert 0-10 range to appropriate speed factor
+    // Doubled the scaling factor to make maximum speed 2x faster
+    const scaledSpeed = (this.options.animationSpeed * 0.3) / 5;
+    this.gl.uniform1f(this.gl.getUniformLocation(this.program, 'u_speed'), scaledSpeed);
+
     // Ensure we're passing exactly 3 components for vec3 uniforms
     const dark1 = new Float32Array([
       this.options.colors.dark1[0],
@@ -445,6 +469,10 @@ class GradientBackground {
       }
     }
 
+    if (this.currentThemeAnimation) {
+      this.currentThemeAnimation.kill();
+    }
+
     window.removeEventListener('resize', this.resize);
     window.removeEventListener('keydown', this.toggleGUI);
 
@@ -458,71 +486,50 @@ class GradientBackground {
       this.canvas.parentNode.removeChild(this.canvas);
     }
 
-    window.removeEventListener('resize', () => this.handleThemeChange(this
-      .checkVisibleThemeElements()));
     ScrollTrigger.getAll().forEach(trigger => trigger.kill());
   }
 
-  setTheme(theme, duration = 2.0) {
-    //console.log(`🎨 Setting theme to ${theme} with duration ${duration}`);
-    //console.log('Current bgPower:', this.options.bgPower);
+  setTheme(theme) {
+    //console.log("SET THEME : ", theme)
+    // Tuer l'animation précédente si elle existe
+    if (this.currentThemeAnimation) {
+      this.currentThemeAnimation.kill();
+    }
+
+    const startValue = this.options.bgPower;
+    const endValue = theme === 'dark' ? 0.2 : 0.8;
 
     gsap.to(this.options, {
-      bgPower: theme === 'dark' ? 0.2 : 0.8,
-      duration,
-      ease: 'power2.inOut',
-      onUpdate: () => {
-        //console.log('Theme transition - bgPower:', this.options.bgPower);
-        this.render();
-      },
-      onComplete: () => {
-        //console.log(`✅ Theme transition complete: ${theme}`);
-        //console.log('Final bgPower:', this.options.bgPower);
-      }
+      bgPower: endValue,
+      duration: 0.8,
+      ease: "power2.inOut",
+      onUpdate: () => this.render()
     });
   }
 
   initThemeManagement() {
-    //console.log('🚀 Theme Management Initialization');
-    //console.log('Current theme state:', this.currentTheme);
-
     const darkElements = gsap.utils.toArray('[data-animate-theme-to="dark"]');
-    //console.log('🔍 Dark elements found:', darkElements.length);
 
-    if (darkElements.length > 0) {
-      //console.log('📍 Setting up ScrollTriggers for dark elements');
-      darkElements.forEach((element, index) => {
-        ScrollTrigger.create({
-          trigger: element,
-          start: 'top center', // Changed from bottom to center
-          end: 'bottom center', // Changed trigger points
-          onEnter: () => {
-            //console.log(`🎯 Dark element ${index} entered - Setting DARK theme`);
-            this.handleThemeChange('dark');
-          },
-          onEnterBack: () => {
-            //console.log(`↩️ Dark element ${index} entered back - Setting DARK theme`);
-            this.handleThemeChange('dark');
-          },
-          onLeave: () => {
-            //console.log(`⬆️ Dark element ${index} left - Setting LIGHT theme`);
-            this.handleThemeChange('light');
-          },
-          onLeaveBack: () => {
-            //console.log(`⬇️ Dark element ${index} left back - Setting LIGHT theme`);
-            this.handleThemeChange('light');
-          },
-          markers: false
-        });
+    if (darkElements.length > 0) // Un seul ScrollTrigger pour tous les éléments sombres
+    {
+      // Un seul ScrollTrigger pour tous les éléments sombres
+      ScrollTrigger.create({
+        trigger: darkElements[0].parentElement, // Utiliser le parent comme déclencheur
+        start: 'top 60%',
+        end: 'bottom 40%',
+        onUpdate: (self) => {
+          // Interpolation plus douce avec une courbe d'accélération
+          const progress = gsap.parseEase("power2.inOut")(self.progress);
+          this.options.bgPower = 0.2 + (progress * 0.6); // Inversé la formule ici
+          this.render();
+        },
+        onRefresh: () => {
+          this.render();
+        }
       });
-    } else {
-      //console.log('⚪ No dark elements - Setting light mode by default');
-      this.handleThemeChange('light');
     }
 
-    // Initial theme check
     const initialTheme = this.checkVisibleThemeElements();
-    //console.log('Initial theme check:', initialTheme);
     this.handleThemeChange(initialTheme);
   }
 
@@ -581,19 +588,9 @@ class GradientBackground {
   }
 
   handleThemeChange(theme) {
-    //console.log('🔄 Theme change handler');
-    console.log('States:', {
-      currentTheme: this.currentTheme,
-      requestedTheme: theme,
-      bgPower: this.options.bgPower
-    });
-
     if (theme !== this.currentTheme) {
-      console.log(`⚡ Changing theme from ${this.currentTheme} to ${theme}`);
       this.currentTheme = theme;
-      this.setTheme(theme, 1.5);
-    } else {
-      console.log('↩️ Theme unchanged:', theme);
+      this.setTheme(theme);
     }
   }
 
@@ -615,10 +612,11 @@ if (bgGradientContainer) {
     colors: {
       dark1: hexToVec3(0x101921),
       dark2: hexToVec3(0x71a3b0),
-      light1: hexToVec3(0xf7fafc),
+      light1: hexToVec3(0xdee1e3),
       light2: hexToVec3(0xc4dce5)
     },
-    bgPower: 0.2
+    bgPower: 0.2,
+    animationSpeed: 3.0,
   });
 
   // Fade in after initialization
@@ -627,7 +625,8 @@ if (bgGradientContainer) {
     gradient.setTheme(gradient.checkVisibleThemeElements());
     gsap.to(bgGradientContainer, {
       opacity: 1,
-      duration: 1.5,
+      duration: 1,
+      delay: 1,
       ease: 'power2.inOut',
       onComplete: () => {
         console.log('✨ Gradient fade-in complete');
